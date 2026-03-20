@@ -232,8 +232,69 @@ CREATE INDEX idx_memories_room ON memories(room_id);
 
 ## AI お題生成
 
-Workers AI (Meta Llama 3.x) または OpenAI API を使い、
-シチュエーションに応じたオリジナルお題を生成する。
+Gemini API（無料枠）を使い、2つの経路でお題を生成する。
+
+### 生成パターン
+
+#### ① 日次バッチ生成（GitHub Actions）
+
+毎日0:00 JSTに自動実行。お題プールを継続的に拡充する。
+
+- **頻度**: 1日1回
+- **生成数**: 50個/回
+- **API**: Gemini (gemini-2.5-flash, 無料枠)
+- **保存先**: Cloudflare D1 (cards テーブル)
+- **重複チェック**: テキスト類似度で既存カードとの重複を排除
+- **コスト**: 0円（Gemini API 無料枠内）
+
+```yaml
+# .github/workflows/generate-cards.yml
+name: Generate Cards
+on:
+  schedule:
+    - cron: '0 15 * * *'  # 毎日 00:00 JST
+  workflow_dispatch:       # 手動実行
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pnpm install
+      - run: pnpm run generate-cards
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+```
+
+バッチ生成時は以下の変数でバリエーションを出す:
+- **季節**: 春/夏/秋/冬
+- **時間帯**: 朝/昼/夕方/夜
+- **曜日**: 平日/休日
+- **シチュエーション**: 飲み会後/旅行中/初対面/カップル etc.
+
+#### ② ユーザーオンデマンド生成
+
+ルーム作成時に「AIでお題を生成」ボタンを押すと、
+その場のコンテキストに合わせたお題を即時生成する。
+
+- **生成数**: 10個/回
+- **API**: Gemini (gemini-2.5-flash, 無料枠)
+- **レートリミット**: 1ルームあたり3回まで（無料枠保護）
+
+### スケール予測
+
+| 期間 | 累計お題数 |
+|------|-----------|
+| 1週間 | 350枚 |
+| 1ヶ月 | 1,500枚 |
+| 3ヶ月 | 4,500枚 |
+| 6ヶ月 | 9,000枚 |
 
 ### Input
 
@@ -241,10 +302,12 @@ Workers AI (Meta Llama 3.x) または OpenAI API を使い、
 interface GenerateRequest {
   context?: {
     time: 'morning' | 'afternoon' | 'evening' | 'night';
+    season?: 'spring' | 'summer' | 'autumn' | 'winter';
     weather?: string;
     location?: string;         // GPS or 手入力
     playerCount: number;
     mood?: 'chill' | 'adventure' | 'romantic' | 'party';
+    situation?: string;        // 飲み会後、旅行中 etc.
   };
   count: number;               // 生成枚数
   exclude: string[];           // 既存カードIDリスト（重複防止）
@@ -259,8 +322,10 @@ interface GenerateRequest {
 条件:
 - {playerCount}人で遊んでいます
 - 時間帯: {time}
+- 季節: {season}
 - 場所: {location}
 - ムード: {mood}
+- シチュエーション: {situation}
 
 以下のルールでお題を{count}個生成してください:
 1. 「普段やらないけど、やってみたら最高の思い出になる」こと
@@ -268,9 +333,18 @@ interface GenerateRequest {
 3. 参加者全員が楽しめること
 4. 1つのお題は30文字以内
 5. 具体的なアクションであること（抽象的なNG）
+6. 既存のお題と被らないこと
 
-JSONの配列で返してください。
+JSONの配列で返してください:
+[{ "text": "お題テキスト", "category": "カテゴリ" }]
 ```
+
+### 品質管理
+
+- 生成後にフィルタリング: 不適切/危険/実行不可能なお題を除外
+- 文字数チェック: 30文字以内
+- 重複チェック: Levenshtein距離 or embedding類似度で既存カードと比較
+- カテゴリバランス: バッチ生成時はカテゴリ偏りを検出して次回の生成パラメータに反映
 
 ## PWA Configuration
 
