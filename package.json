@@ -1,0 +1,33 @@
+{
+  "name": "koreka",
+  "version": "1.0.0",
+  "description": "みんなで「次何する？」を決めるリアルタイムカードゲーム",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:worker": "wrangler dev",
+    "dev:frontend": "cd frontend && npx vite --port 5173",
+    "build": "cd frontend && npx vite build",
+    "deploy": "pnpm build && wrangler deploy",
+    "db:init": "wrangler d1 execute koreka-db --file=src/db/schema.sql --local",
+    "db:seed": "wrangler d1 execute koreka-db --file=src/db/seed.sql --local",
+    "db:setup": "pnpm db:init && pnpm db:seed",
+    "typecheck": "tsc --noEmit && cd frontend && npx tsc --noEmit"
+  },
+  "dependencies": {
+    "framer-motion": "^12.38.0",
+    "hono": "^4.12.8",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.1",
+    "wrangler": "^4.76.0"
+  }
+}

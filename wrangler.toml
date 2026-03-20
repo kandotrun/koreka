@@ -1,0 +1,19 @@
+name = "koreka"
+main = "src/index.ts"
+compatibility_date = "2026-03-20"
+
+[assets]
+directory = "frontend/dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "koreka-db"
+database_id = "local"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "RoomDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RoomDurableObject"]
