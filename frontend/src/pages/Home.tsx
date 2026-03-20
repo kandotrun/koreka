@@ -1,10 +1,35 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+
+const categoryConfig: Record<string, { icon: string; color: string }> = {
+  adventure: { icon: '🏔️', color: '#FF6B35' },
+  chill: { icon: '☕', color: '#4ECDC4' },
+  food: { icon: '🍜', color: '#FFE66D' },
+  night: { icon: '🌙', color: '#A855F7' },
+  creative: { icon: '🎨', color: '#EC4899' },
+  random: { icon: '🎲', color: '#EF4444' },
+  spicy: { icon: '🔥', color: '#F43F5E' },
+};
+
+interface SampleCard {
+  id: string;
+  text: string;
+  category: string;
+  generated: number;
+}
 
 export default function Home() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'home' | 'join' | 'create'>('home');
+  const [sampleCards, setSampleCards] = useState<SampleCard[]>([]);
+
+  useEffect(() => {
+    fetch('/api/cards/sample?limit=6')
+      .then(res => res.json())
+      .then(data => setSampleCards(data.cards || []))
+      .catch(() => {});
+  }, []);
   const [name, setName] = useState('');
   const [code, setCode] = useState(['', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -101,32 +126,35 @@ export default function Home() {
               — お題の例 —
             </p>
             <div style={{ display: 'flex', gap: 'var(--space-sm)', overflowX: 'auto', paddingBottom: 4 }}>
-              {[
-                { text: '夜の海にみんなで行く', icon: '🏔️', color: '#FF6B35' },
-                { text: '知らないバーに飛び込む', icon: '🌙', color: '#A855F7' },
-                { text: '屋台で一番安いメニューだけで晩ごはん', icon: '🍜', color: '#FFE66D' },
-                { text: '目を見つめ合って先に逸らした方が負け', icon: '🔥', color: '#F43F5E' },
-              ].map((card, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 + i * 0.1 }}
-                  style={{
-                    minWidth: 140,
-                    padding: '12px 14px',
-                    background: `linear-gradient(135deg, ${card.color}15, ${card.color}08)`,
-                    border: `1px solid ${card.color}25`,
-                    borderRadius: 'var(--radius-md)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <span style={{ fontSize: 14 }}>{card.icon}</span>
-                  <p style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5, color: 'var(--text)' }}>
-                    {card.text}
-                  </p>
-                </motion.div>
-              ))}
+              {(sampleCards.length > 0 ? sampleCards : [
+                { id: 'f1', text: '夜の海にみんなで行く', category: 'adventure', generated: 0 },
+                { id: 'f2', text: '知らないバーに飛び込む', category: 'night', generated: 0 },
+                { id: 'f3', text: '屋台で一番安いメニューだけで晩ごはん', category: 'food', generated: 0 },
+                { id: 'f4', text: '目を見つめ合って先に逸らした方が負け', category: 'spicy', generated: 0 },
+              ]).map((card, i) => {
+                const cat = categoryConfig[card.category] || { icon: '📋', color: '#8B8B9E' };
+                return (
+                  <motion.div
+                    key={card.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 + i * 0.1 }}
+                    style={{
+                      minWidth: 140,
+                      padding: '12px 14px',
+                      background: `linear-gradient(135deg, ${cat.color}15, ${cat.color}08)`,
+                      border: `1px solid ${cat.color}25`,
+                      borderRadius: 'var(--radius-md)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                    <p style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5, color: 'var(--text)' }}>
+                      {card.text}
+                    </p>
+                  </motion.div>
+                );
+              })}
             </div>
           </div>
 
