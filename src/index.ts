@@ -39,4 +39,28 @@ app.get('/api/cards/categories', async (c) => {
   return c.json({ categories });
 });
 
+// お題サンプル取得（QA用）
+app.get('/api/cards/sample', async (c) => {
+  const category = c.req.query('category');
+  const limit = parseInt(c.req.query('limit') || '20');
+  let query = 'SELECT id, text, category, generated FROM cards';
+  const params: string[] = [];
+  if (category) {
+    query += ' WHERE category = ?';
+    params.push(category);
+  }
+  query += ' ORDER BY RANDOM() LIMIT ?';
+  params.push(String(Math.min(limit, 50)));
+  const { results } = await c.env.DB.prepare(query).bind(...params).all<{
+    id: string; text: string; category: string; generated: number;
+  }>();
+  return c.json({ cards: results || [], count: (results || []).length });
+});
+
+// お題総数
+app.get('/api/cards/count', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT COUNT(*) as total FROM cards').all<{ total: number }>();
+  return c.json({ total: results?.[0]?.total || 0 });
+});
+
 export default app;
