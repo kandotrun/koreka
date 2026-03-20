@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Card from '../components/Card';
 import type { Card as CardType, PlayerInfo } from '../../../src/types';
+import { sound } from '../lib/sound';
 
 const bounceSpring = {
   type: 'spring' as const,
@@ -59,6 +61,10 @@ export default function Result() {
   const { card, votes, players } = state;
   const voteCount = Object.values(votes).filter(v => v === card.id).length;
   const totalPlayers = players.length;
+
+  useEffect(() => {
+    sound.play('result');
+  }, []);
 
   return (
     <div className="page" style={{ justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>

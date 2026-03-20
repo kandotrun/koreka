@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRoomContext } from '../contexts/RoomContext';
 import SwipeArea from '../components/SwipeArea';
 import Card from '../components/Card';
+import { sound } from '../lib/sound';
 
 export default function Game() {
   const { code } = useParams<{ code: string }>();
@@ -17,6 +18,13 @@ export default function Game() {
       setSelecting(false);
     }
   }, [room.cards]);
+
+  // ラウンド完了サウンド
+  useEffect(() => {
+    if (room.round > 1) {
+      sound.play('roundComplete');
+    }
+  }, [room.round]);
 
   // 結果画面に遷移
   useEffect(() => {

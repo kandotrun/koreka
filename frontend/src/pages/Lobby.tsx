@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 import { useRoomContext } from '../contexts/RoomContext';
+import { sound } from '../lib/sound';
 
 const avatarColors = ['#FF6B35', '#4ECDC4', '#FFE66D', '#A855F7', '#EC4899', '#EF4444'];
 
@@ -10,6 +12,8 @@ export default function Lobby() {
   const navigate = useNavigate();
   const room = useRoomContext();
   const [joined, setJoined] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [prevPlayerCount, setPrevPlayerCount] = useState(0);
 
   // 接続 + 自動join
   useEffect(() => {
@@ -27,8 +31,23 @@ export default function Lobby() {
     }
   }, [room.phase, code, navigate]);
 
+  // プレイヤー参加時のサウンド
+  useEffect(() => {
+    if (room.players.length > prevPlayerCount && prevPlayerCount > 0) {
+      sound.play('playerJoin');
+    }
+    setPrevPlayerCount(room.players.length);
+  }, [room.players.length, prevPlayerCount]);
+
+  // 準備OK時のサウンド
+  const handleReady = () => {
+    sound.play('ready');
+    room.ready();
+  };
+
   const isHost = room.playerId === room.hostId;
   const allReady = room.players.length >= 2 && room.players.every(p => p.id === room.hostId || p.ready);
+  const roomUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   return (
     <div className="page" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
@@ -46,9 +65,81 @@ export default function Lobby() {
         {code}
       </div>
 
+      {/* QRコード */}
+      <div
+        onClick={() => setQrModalOpen(true)}
+        style={{
+          marginTop: 'var(--space-md)',
+          padding: 'var(--space-sm)',
+          background: 'white',
+          borderRadius: 'var(--radius-md)',
+          cursor: 'pointer',
+          display: 'inline-flex',
+        }}
+      >
+        <QRCodeSVG
+          value={roomUrl}
+          size={80}
+          bgColor="#FFFFFF"
+          fgColor="#0A0A0F"
+          level="M"
+        />
+      </div>
+
       <p style={{ color: 'var(--text-sub)', fontSize: 12, marginTop: 'var(--space-sm)' }}>
-        このコードを友達にシェアしよう
+        QRコードをタップして拡大 · コードを友達にシェアしよう
       </p>
+
+      {/* QRモーダル */}
+      <AnimatePresence>
+        {qrModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setQrModalOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.85)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 100,
+              cursor: 'pointer',
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.5 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                padding: 'var(--space-xl)',
+                background: 'white',
+                borderRadius: 'var(--radius-lg)',
+              }}
+            >
+              <QRCodeSVG
+                value={roomUrl}
+                size={240}
+                bgColor="#FFFFFF"
+                fgColor="#0A0A0F"
+                level="M"
+              />
+            </motion.div>
+            <p style={{
+              color: 'var(--text)',
+              fontSize: 14,
+              marginTop: 'var(--space-lg)',
+            }}>
+              タップして閉じる
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 区切り線 */}
       <div style={{
@@ -127,7 +218,7 @@ export default function Lobby() {
         gap: 'var(--space-md)',
       }}>
         {!isHost && (
-          <button className="btn-primary" onClick={() => room.ready()}>
+          <button className="btn-primary" onClick={handleReady}>
             {room.players.find(p => p.id === room.playerId)?.ready ? '待機に戻す' : '準備OK ✓'}
           </button>
         )}

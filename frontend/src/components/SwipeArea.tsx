@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Card as CardType } from '../../../src/types';
 import Card from './Card';
 import { useSwipe } from '../hooks/useSwipe';
+import { sound } from '../lib/sound';
 
 const cardSpring = {
   type: 'spring' as const,
@@ -27,6 +28,7 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
 
   const handleKeep = useCallback(() => {
     if (!currentCard) return;
+    sound.play('swipeKeep');
     const newKept = [...keptCards, currentCard.id];
     setKeptCards(newKept);
     setExitX(300);
@@ -41,6 +43,7 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
 
   const handleDiscard = useCallback(() => {
     if (!currentCard) return;
+    sound.play('swipeDiscard');
     setExitX(-300);
 
     // If this is the last card, must keep if no others kept

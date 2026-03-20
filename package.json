@@ -14,11 +14,13 @@
     "db:setup": "pnpm db:init && pnpm db:seed",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit && cd frontend && npx tsc --noEmit"
+    "typecheck": "tsc --noEmit && cd frontend && npx tsc --noEmit",
+    "generate-cards": "npx tsx scripts/generate-cards.ts"
   },
   "dependencies": {
     "framer-motion": "^12.38.0",
     "hono": "^4.12.8",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1"
@@ -28,6 +30,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^8.0.1",
     "vitest": "^4.1.0",
