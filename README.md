@@ -33,6 +33,7 @@
 - [Game Flow](docs/game-flow.md) — ゲームフロー・UI遷移
 - [API](docs/api.md) — REST / WebSocket API仕様
 - [Design](docs/design.md) — デザインシステム・カラー・画面設計
+- [Deploy](docs/deploy.md) — デプロイ手順・CI/CD・トラブルシューティング
 
 ## Getting Started
 
