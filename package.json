@@ -1,6 +1,6 @@
 {
   "name": "koreka",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "みんなで「次何する？」を決めるリアルタイムカードゲーム",
   "private": true,
   "scripts": {
