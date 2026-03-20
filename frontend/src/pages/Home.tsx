@@ -79,14 +79,100 @@ export default function Home() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}
+          style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}
         >
-          <button className="btn-primary" onClick={() => setMode('create')}>
-            ルームを作る 🎴
-          </button>
-          <button className="btn-secondary" onClick={() => setMode('join')}>
-            コードで参加
-          </button>
+          {/* サービス説明 */}
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-lg)',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--text)' }}>
+              みんなで集まった時の<br />
+              <strong style={{ color: 'var(--primary)' }}>「次、何する？」</strong>を解決。<br />
+              カードをスワイプして絞り込むだけで、<br />
+              全員が納得のプランが決まります。
+            </p>
+          </div>
+
+          {/* お題サンプル */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+            <p style={{ fontSize: 11, color: 'var(--text-sub)', textAlign: 'center', letterSpacing: '0.1em' }}>
+              — お題の例 —
+            </p>
+            <div style={{ display: 'flex', gap: 'var(--space-sm)', overflowX: 'auto', paddingBottom: 4 }}>
+              {[
+                { text: '夜の海にみんなで行く', icon: '🏔️', color: '#FF6B35' },
+                { text: '知らないバーに飛び込む', icon: '🌙', color: '#A855F7' },
+                { text: '屋台で一番安いメニューだけで晩ごはん', icon: '🍜', color: '#FFE66D' },
+                { text: '目を見つめ合って先に逸らした方が負け', icon: '🔥', color: '#F43F5E' },
+              ].map((card, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 + i * 0.1 }}
+                  style={{
+                    minWidth: 140,
+                    padding: '12px 14px',
+                    background: `linear-gradient(135deg, ${card.color}15, ${card.color}08)`,
+                    border: `1px solid ${card.color}25`,
+                    borderRadius: 'var(--radius-md)',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>{card.icon}</span>
+                  <p style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5, color: 'var(--text)' }}>
+                    {card.text}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* 使い方 */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 'var(--space-lg)',
+            padding: '0 var(--space-sm)',
+          }}>
+            {[
+              { step: '1', label: 'ルーム作成' },
+              { step: '2', label: 'カード選別' },
+              { step: '3', label: 'これか！' },
+            ].map((s, i) => (
+              <div key={i} style={{ textAlign: 'center' }}>
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: 'var(--primary)',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  margin: '0 auto 6px',
+                }}>
+                  {s.step}
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text-sub)' }}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* ボタン */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+            <button className="btn-primary" onClick={() => setMode('create')}>
+              ルームを作る 🎴
+            </button>
+            <button className="btn-secondary" onClick={() => setMode('join')}>
+              コードで参加
+            </button>
+          </div>
         </motion.div>
       )}
 
