@@ -46,8 +46,8 @@ async function generateCards(): Promise<Array<{ text: string; category: string }
 ${CATEGORIES.map(c => `- ${c.id}（${c.name} ${c.emoji}）: ${c.description}`).join('\n')}
 
 ## ルール
-- 50個のお題を生成してください
-- 各カテゴリから均等に（各7-8個程度）
+- 200個のお題を生成してください
+- 各カテゴリから均等に（各28-30個程度）
 - 日本語で、友達同士のカジュアルな口調
 - 短く（20文字以内推奨、最大30文字）
 - 具体的で実行可能な内容
@@ -74,7 +74,7 @@ JSON配列で出力してください。他のテキストは不要です。
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.9,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 16384,
         },
       }),
     }
