@@ -70,7 +70,7 @@ export default function Home() {
           Koreka
         </h1>
         <p style={{ color: 'var(--text-sub)', marginTop: 8, fontSize: 14 }}>
-          これか！と思える瞬間を。
+          みんなの「次どうする？」が決まるゲーム
         </p>
       </motion.div>
 
@@ -89,10 +89,9 @@ export default function Home() {
             border: '1px solid rgba(255,255,255,0.06)',
           }}>
             <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--text)' }}>
-              みんなで集まった時の<br />
-              <strong style={{ color: 'var(--primary)' }}>「次、何する？」</strong>を解決。<br />
-              カードをスワイプして絞り込むだけで、<br />
-              全員が納得のプランが決まります。
+              カードをスワイプして<br />
+              <strong style={{ color: 'var(--primary)' }}>やりたいこと</strong>を残すだけ。<br />
+              最後に残った1枚がみんなの答え。
             </p>
           </div>
 
