@@ -27,9 +27,12 @@
 | DB | Cloudflare D1 (お題・履歴) |
 | AI お題生成 | Workers AI / OpenAI |
 
-## Architecture
+## Docs
 
-→ [docs/architecture.md](docs/architecture.md)
+- [Architecture](docs/architecture.md) — アーキテクチャ・DB設計・WebSocket仕様
+- [Game Flow](docs/game-flow.md) — ゲームフロー・UI遷移
+- [API](docs/api.md) — REST / WebSocket API仕様
+- [Design](docs/design.md) — デザインシステム・カラー・画面設計
 
 ## Getting Started
 
