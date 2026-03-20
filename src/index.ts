@@ -27,6 +27,7 @@ app.get('/api/cards/categories', async (c) => {
     night: { name: '夜遊び', icon: '🌙' },
     creative: { name: 'クリエイティブ', icon: '🎨' },
     random: { name: 'カオス', icon: '🎲' },
+    spicy: { name: 'スパイシー', icon: '🔥' },
   };
 
   const categories = (results || []).map(r => ({

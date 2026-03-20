@@ -8,6 +8,7 @@ const categoryConfig: Record<string, { name: string; icon: string; color: string
   night: { name: '夜遊び', icon: '🌙', color: '#A855F7', gradient: 'linear-gradient(135deg, #A855F7 0%, #C084FC 100%)' },
   creative: { name: 'クリエイティブ', icon: '🎨', color: '#EC4899', gradient: 'linear-gradient(135deg, #EC4899 0%, #F472B6 100%)' },
   random: { name: 'カオス', icon: '🎲', color: '#EF4444', gradient: 'linear-gradient(135deg, #EF4444 0%, #F87171 100%)' },
+  spicy: { name: 'スパイシー', icon: '🔥', color: '#F43F5E', gradient: 'linear-gradient(135deg, #F43F5E 0%, #FB7185 100%)' },
 };
 
 interface CardProps {
