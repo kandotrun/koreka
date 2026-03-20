@@ -12,6 +12,8 @@
     "db:init": "wrangler d1 execute koreka-db --file=src/db/schema.sql --local",
     "db:seed": "wrangler d1 execute koreka-db --file=src/db/seed.sql --local",
     "db:setup": "pnpm db:init && pnpm db:seed",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit && cd frontend && npx tsc --noEmit"
   },
   "dependencies": {
@@ -28,6 +30,8 @@
     "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^5.9.3",
     "vite": "^8.0.1",
+    "vitest": "^4.1.0",
     "wrangler": "^4.76.0"
-  }
+  },
+  "packageManager": "pnpm@9.15.0+sha512.76e2379760a4328ec4415815bcd6628dee727af3779aaa4c914e3944156c4299921a89f976381ee107d41f12cfa4b66681ca9c718f0668fa0831ed4c6d8ba56c"
 }
