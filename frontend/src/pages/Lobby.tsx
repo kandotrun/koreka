@@ -11,18 +11,8 @@ export default function Lobby() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const room = useRoomContext();
-  const [joined, setJoined] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [prevPlayerCount, setPrevPlayerCount] = useState(0);
-
-  // 接続 + 自動join
-  useEffect(() => {
-    if (!joined) {
-      const name = sessionStorage.getItem('playerName') || 'ゲスト';
-      room.connect(name);
-      setJoined(true);
-    }
-  }, [joined, room.connect]);
 
   // ゲーム開始でGame画面に遷移
   useEffect(() => {
@@ -66,7 +56,8 @@ export default function Lobby() {
       </div>
 
       {/* QRコード */}
-      <div
+      <button
+        type="button"
         onClick={() => setQrModalOpen(true)}
         style={{
           marginTop: 'var(--space-md)',
@@ -75,6 +66,7 @@ export default function Lobby() {
           borderRadius: 'var(--radius-md)',
           cursor: 'pointer',
           display: 'inline-flex',
+          border: 'none',
         }}
       >
         <QRCodeSVG
@@ -84,7 +76,7 @@ export default function Lobby() {
           fgColor="#0A0A0F"
           level="M"
         />
-      </div>
+      </button>
 
       <p style={{ color: 'var(--text-sub)', fontSize: 12, marginTop: 'var(--space-sm)' }}>
         QRコードをタップして拡大 · コードを友達にシェアしよう
@@ -218,12 +210,13 @@ export default function Lobby() {
         gap: 'var(--space-md)',
       }}>
         {!isHost && (
-          <button className="btn-primary" onClick={handleReady}>
+          <button type="button" className="btn-primary" onClick={handleReady}>
             {room.players.find(p => p.id === room.playerId)?.ready ? '待機に戻す' : '準備OK ✓'}
           </button>
         )}
         {isHost && (
           <button
+            type="button"
             className="btn-primary"
             disabled={!allReady}
             onClick={() => room.start()}

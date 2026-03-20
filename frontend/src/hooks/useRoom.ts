@@ -112,6 +112,12 @@ export function useRoom(code: string | undefined) {
   const select = useCallback((cardIds: string[]) => sendMessage({ type: 'select', cardIds }), [sendMessage]);
   const vote = useCallback((cardId: string) => sendMessage({ type: 'vote', cardId }), [sendMessage]);
 
+  useEffect(() => {
+    if (!code || wsRef.current) return;
+    const name = window.sessionStorage.getItem('playerName') || 'ゲスト';
+    connect(name);
+  }, [code, connect]);
+
   // Ping to keep alive
   useEffect(() => {
     const interval = setInterval(() => {
