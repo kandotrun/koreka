@@ -106,14 +106,22 @@ export function useRoom(code: string | undefined) {
           break;
         case 'error':
           console.error('Room error:', msg.message);
-          // invalid_selectionエラー時はカード再表示（全部キープしちゃった場合等）
           if (msg.message === 'invalid_selection') {
             setState(s => {
+              // selecting: カード再表示（全部キープしちゃった場合等）
               if (s.phase === 'selecting' && s.cards.length > 0) {
                 return { ...s, cards: [...s.cards], pending: [] };
               }
+              // voting: 投票状態リセットして再投票可能に
+              if (s.phase === 'voting') {
+                return { ...s, survivors: [...s.survivors], pending: [] };
+              }
               return s;
             });
+          }
+          if (msg.message === 'already_voted') {
+            // 二重投票 — 待機状態に戻す（他のプレイヤー待ち）
+            setState(s => ({ ...s, pending: [] }));
           }
           break;
       }

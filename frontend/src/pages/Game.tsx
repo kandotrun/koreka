@@ -44,8 +44,11 @@ export default function Game() {
     setSelecting(true);
   }, [room.select]);
 
+  const [voted, setVoted] = useState(false);
+
   const handleVote = useCallback((cardId: string) => {
     room.vote(cardId);
+    setVoted(true);
   }, [room.vote]);
 
   // 選別フェーズ
@@ -84,7 +87,7 @@ export default function Game() {
   }
 
   // 最終投票フェーズ
-  if (room.phase === 'voting' && room.survivors.length > 0) {
+  if (room.phase === 'voting' && room.survivors.length > 0 && !voted) {
     return (
       <div className="page" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
         <motion.h2
