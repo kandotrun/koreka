@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import { I18nProvider } from './contexts/I18nContext';
 import { RoomProvider } from './contexts/RoomContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
 import Game from './pages/Game';
@@ -22,14 +23,16 @@ function RoomRoutes() {
 
 export default function App() {
   return (
-    <I18nProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/:code/*" element={<RoomRoutes />} />
-        </Routes>
-      </BrowserRouter>
-    </I18nProvider>
+    <ErrorBoundary>
+      <I18nProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/:code/*" element={<RoomRoutes />} />
+          </Routes>
+        </BrowserRouter>
+      </I18nProvider>
+    </ErrorBoundary>
   );
 }

@@ -5,6 +5,7 @@ import Card from '../components/Card';
 import type { Card as CardType, PlayerInfo } from '../../../src/types';
 import { sound } from '../lib/sound';
 import { useI18n } from '../contexts/I18nContext';
+import { useRoomContext } from '../contexts/RoomContext';
 
 const bounceSpring = {
   type: 'spring' as const,
@@ -49,6 +50,8 @@ export default function Result() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useI18n();
+  const room = useRoomContext();
+  const isHost = room.playerId === room.hostId;
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [memoryComment, setMemoryComment] = useState('');
   const [memorySaving, setMemorySaving] = useState(false);
@@ -100,8 +103,15 @@ export default function Result() {
     }
   }, []);
 
+  // Navigate back to lobby on restart
+  useEffect(() => {
+    if (room.phase === 'waiting') {
+      navigate(`/${code}`);
+    }
+  }, [room.phase, code, navigate]);
+
   return (
-    <div className="page" style={{ justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+    <div className="page" role="main" style={{ justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
       <Confetti />
 
       {/* Title */}
@@ -227,13 +237,19 @@ export default function Result() {
           maxWidth: 320,
         }}
       >
-        <button
-          className="btn-secondary"
-          style={{ flex: 1 }}
-          onClick={() => navigate('/')}
-        >
-          {t('result.play_again')}
-        </button>
+        {isHost ? (
+          <button
+            className="btn-secondary"
+            style={{ flex: 1 }}
+            onClick={() => room.restart()}
+          >
+            {t('result.play_again')}
+          </button>
+        ) : (
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-sub)', textAlign: 'center' }}>
+            {t('result.waiting_host_restart')}
+          </span>
+        )}
         <button
           className="btn-primary"
           style={{ flex: 1 }}

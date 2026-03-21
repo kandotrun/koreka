@@ -72,7 +72,7 @@ export default function Admin() {
   // Login form
   if (!token) {
     return (
-      <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-lg)' }}>
+      <div className="page" role="main" style={{ justifyContent: 'center', gap: 'var(--space-lg)' }}>
         <h1 style={{ fontSize: 24, fontWeight: 900, textAlign: 'center' }}>
           {t('admin.login_title')}
         </h1>
@@ -112,7 +112,7 @@ export default function Admin() {
 
   if (error) {
     return (
-      <div className="page" style={{ justifyContent: 'center' }}>
+      <div className="page" role="main" style={{ justifyContent: 'center' }}>
         <p style={{ color: 'var(--danger)' }}>{error.message === 'Unauthorized' ? t('admin.auth_error') : t('admin.fetch_error')}</p>
       </div>
     );
@@ -120,14 +120,14 @@ export default function Admin() {
 
   if (!stats) {
     return (
-      <div className="page" style={{ justifyContent: 'center' }}>
+      <div className="page" role="main" style={{ justifyContent: 'center' }}>
         <p style={{ color: 'var(--text-sub)' }}>{t('common.loading')}</p>
       </div>
     );
   }
 
   return (
-    <div className="page" style={{ padding: 'var(--space-lg)', maxWidth: 600, margin: '0 auto' }}>
+    <div className="page" role="main" style={{ padding: 'var(--space-lg)', maxWidth: 600, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-xl)' }}>
         <h1 style={{ fontSize: 28, fontWeight: 900 }}>
           {t('admin.title')}

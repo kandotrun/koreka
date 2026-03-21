@@ -135,7 +135,7 @@ export default function Home() {
   const currentFlag = LANGS.find(l => l.code === lang)?.flag ?? '🇯🇵';
 
   return (
-    <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-xl)', position: 'relative' }}>
+    <div className="page" role="main" style={{ justifyContent: 'center', gap: 'var(--space-xl)', position: 'relative' }}>
       {/* テーマ切り替え + 言語切り替え */}
       <div style={{
         position: 'absolute',
@@ -147,6 +147,7 @@ export default function Home() {
       }}>
         <button
           onClick={cycleLang}
+          aria-label={LANGS.find(l => l.code === lang)?.label ?? 'Language'}
           style={{
             background: 'var(--surface)',
             border: '1px solid var(--border)',
@@ -165,6 +166,7 @@ export default function Home() {
         </button>
         <button
           onClick={toggle}
+          aria-label={`${t('theme.title')}: ${preference}`}
           style={{
             background: 'var(--surface)',
             border: '1px solid var(--border)',
@@ -364,6 +366,7 @@ export default function Home() {
               placeholder={t('home.name_placeholder')}
               maxLength={10}
               autoFocus
+              aria-label={t('home.name_label')}
               style={{
                 width: '100%',
                 height: 48,
@@ -488,6 +491,7 @@ export default function Home() {
                     onChange={e => handleCodeInput(i, e.target.value)}
                     onKeyDown={e => handleCodeKeyDown(i, e)}
                     maxLength={1}
+                    aria-label={`${t('home.room_code_label')} ${i + 1}`}
                   />
                 ))}
               </div>

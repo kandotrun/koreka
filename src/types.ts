@@ -35,6 +35,8 @@ export type ClientMessage =
   | { type: 'start' }
   | { type: 'select'; cardIds: string[] }
   | { type: 'vote'; cardId: string }
+  | { type: 'restart' }
+  | { type: 'kick'; playerId: string }
   | { type: 'ping' };
 
 // Server → Client messages
@@ -47,6 +49,7 @@ export type ServerMessage =
   | { type: 'round_complete'; remaining: number; round: number }
   | { type: 'final_vote'; cards: Card[] }
   | { type: 'result'; card: Card; votes: Record<string, string> }
+  | { type: 'restart' }
   | { type: 'error'; message: string }
   | { type: 'pong' };
 
