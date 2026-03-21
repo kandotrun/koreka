@@ -12,6 +12,7 @@ interface RoomState {
   pending: string[];
   survivors: Card[];
   result: { card: Card; votes: Record<string, string> } | null;
+  error: string | null;
 }
 
 export function useRoom(code: string | undefined) {
@@ -27,6 +28,7 @@ export function useRoom(code: string | undefined) {
     pending: [],
     survivors: [],
     result: null,
+    error: null,
   });
 
   // 接続時に自動joinするための名前を保持
@@ -54,14 +56,18 @@ export function useRoom(code: string | undefined) {
 
     ws.onclose = () => {
       wsRef.current = null;
-      setState(s => ({ ...s, connected: false }));
-      // 自動再接続（デプロイ後の断線復帰用）
-      const savedName = window.sessionStorage.getItem('playerName') || 'ゲスト';
-      setTimeout(() => {
-        if (!wsRef.current) {
-          connect(savedName);
-        }
-      }, 2000);
+      setState(s => {
+        // エラーで切断された場合は再接続しない
+        if (s.error) return { ...s, connected: false };
+        // 自動再接続（デプロイ後の断線復帰用）
+        const savedName = window.sessionStorage.getItem('playerName') || 'ゲスト';
+        setTimeout(() => {
+          if (!wsRef.current) {
+            connect(savedName);
+          }
+        }, 2000);
+        return { ...s, connected: false };
+      });
     };
 
     ws.onmessage = (event) => {
@@ -106,6 +112,12 @@ export function useRoom(code: string | undefined) {
           break;
         case 'error':
           console.error('Room error:', msg.message);
+          // 致命的エラー（参加不可）
+          if (msg.message === 'room_full' || msg.message === 'game_in_progress') {
+            setState(s => ({ ...s, error: msg.message }));
+            ws.close();
+            break;
+          }
           if (msg.message === 'invalid_selection') {
             setState(s => {
               // selecting: カード再表示（全部キープしちゃった場合等）

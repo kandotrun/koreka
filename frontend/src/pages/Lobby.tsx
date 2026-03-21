@@ -44,6 +44,29 @@ export default function Lobby() {
   const allReady = room.players.length >= 2 && room.players.every(p => p.id === room.hostId || p.ready);
   const roomUrl = typeof window !== 'undefined' ? window.location.href : '';
 
+  // エラー画面（満員 or ゲーム中）
+  if (room.error) {
+    const errorMessages: Record<string, { title: string; desc: string }> = {
+      room_full: { title: 'ルームが満員です', desc: 'このルームは最大人数（8人）に達しています。' },
+      game_in_progress: { title: 'ゲーム進行中', desc: 'このルームではすでにゲームが始まっています。' },
+    };
+    const err = errorMessages[room.error] || { title: 'エラー', desc: room.error };
+    return (
+      <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-lg)', textAlign: 'center' }}>
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
+          <div style={{ fontSize: 48, marginBottom: 'var(--space-md)' }}>🚫</div>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{err.title}</h2>
+          <p style={{ color: 'var(--text-sub)', fontSize: 14, marginTop: 'var(--space-sm)', lineHeight: 1.6 }}>
+            {err.desc}
+          </p>
+        </motion.div>
+        <button className="btn-primary" onClick={() => navigate('/')} style={{ maxWidth: 240 }}>
+          トップに戻る
+        </button>
+      </div>
+    );
+  }
+
   // QRから来た参加者用の名前入力画面
   if (needsName) {
     const handleJoin = () => {
