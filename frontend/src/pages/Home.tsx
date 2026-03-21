@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import useSWR from 'swr';
 import { useTheme } from '../hooks/useTheme';
 import { useI18n } from '../contexts/I18nContext';
 import { LANGS } from '../lib/i18n';
+import { fetcher } from '../lib/fetcher';
 
 const categoryConfig: Record<string, { icon: string; color: string }> = {
   adventure: { icon: '🏔️', color: '#FF6B35' },
@@ -35,14 +37,8 @@ export default function Home() {
   const { preference, toggle } = useTheme();
   const { t, lang, setLang } = useI18n();
   const [mode, setMode] = useState<'home' | 'join' | 'create'>('home');
-  const [sampleCards, setSampleCards] = useState<SampleCard[]>([]);
-
-  useEffect(() => {
-    fetch('/api/cards/sample?limit=100')
-      .then(res => res.json())
-      .then(data => setSampleCards(data.cards || []))
-      .catch(() => {});
-  }, []);
+  const { data: sampleData } = useSWR<{ cards?: SampleCard[] }>('/api/cards/sample?limit=100', fetcher);
+  const sampleCards = sampleData?.cards ?? [];
   const allCategories = Object.keys(categoryConfig) as Array<keyof typeof categoryConfig>;
 
   const [name, setName] = useState('');

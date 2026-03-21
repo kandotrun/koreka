@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { useI18n } from '../contexts/I18nContext';
+import { authFetcher } from '../lib/fetcher';
 
 interface StatsData {
   totalCards: number;
@@ -26,8 +28,6 @@ export default function Admin() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-  const [stats, setStats] = useState<StatsData | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
     if (!password.trim()) return;
@@ -57,26 +57,17 @@ export default function Admin() {
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     setToken(null);
-    setStats(null);
-    setError(null);
   };
 
-  useEffect(() => {
-    if (!token) return;
-    fetch('/api/admin/stats', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(res => {
-        if (res.status === 401) {
-          handleLogout();
-          setError(t('admin.auth_error'));
-          return null;
-        }
-        return res.json();
-      })
-      .then(data => { if (data) setStats(data); })
-      .catch(() => setError(t('admin.fetch_error')));
-  }, [token]);
+  const { data: stats, error } = useSWR<StatsData>(
+    token ? '/api/admin/stats' : null,
+    (url: string) => authFetcher(url, token!),
+    {
+      onError: (err) => {
+        if (err.message === 'Unauthorized') handleLogout();
+      },
+    },
+  );
 
   // Login form
   if (!token) {
@@ -122,7 +113,7 @@ export default function Admin() {
   if (error) {
     return (
       <div className="page" style={{ justifyContent: 'center' }}>
-        <p style={{ color: 'var(--danger)' }}>{error}</p>
+        <p style={{ color: 'var(--danger)' }}>{error.message === 'Unauthorized' ? t('admin.auth_error') : t('admin.fetch_error')}</p>
       </div>
     );
   }
