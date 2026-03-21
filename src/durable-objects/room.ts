@@ -22,9 +22,21 @@ interface InternalRoomState {
   cardsPerPlayer: number;
 }
 
+interface PersistentRoomData {
+  code: string;
+  phase: RoomPhase;
+  hostId: string;
+  deck: Card[];
+  round: number;
+  survivors: Card[];
+  cardsPerPlayer: number;
+  hands: Record<string, Card[]>;
+}
+
 export class RoomDurableObject implements DurableObject {
   private state: DurableObjectState;
   private room: InternalRoomState;
+  private initialized = false;
 
   constructor(state: DurableObjectState, env: unknown) {
     this.state = state;
@@ -43,7 +55,42 @@ export class RoomDurableObject implements DurableObject {
     };
   }
 
+  private async restore() {
+    if (this.initialized) return;
+    this.initialized = true;
+    const saved = await this.state.storage.get<PersistentRoomData>('room');
+    if (saved) {
+      this.room.code = saved.code;
+      this.room.deck = saved.deck;
+      this.room.cardsPerPlayer = saved.cardsPerPlayer;
+      this.room.round = saved.round;
+      this.room.survivors = saved.survivors;
+      // Restore phase only if game was in progress (lobby resets on reconnect)
+      if (saved.phase === 'selecting' || saved.phase === 'voting') {
+        this.room.phase = saved.phase;
+        // Restore hands
+        this.room.hands = new Map(Object.entries(saved.hands || {}));
+      }
+      // Don't restore hostId/players — they reconnect via WS
+    }
+  }
+
+  private async persist() {
+    const data: PersistentRoomData = {
+      code: this.room.code,
+      phase: this.room.phase,
+      hostId: this.room.hostId,
+      deck: this.room.deck,
+      round: this.room.round,
+      survivors: this.room.survivors,
+      cardsPerPlayer: this.room.cardsPerPlayer,
+      hands: Object.fromEntries(this.room.hands),
+    };
+    await this.state.storage.put('room', data);
+  }
+
   async fetch(request: Request): Promise<Response> {
+    await this.restore();
     const url = new URL(request.url);
 
     if (url.pathname === '/ws') {
@@ -57,6 +104,7 @@ export class RoomDurableObject implements DurableObject {
       if (body.cardsPerPlayer) {
         this.room.cardsPerPlayer = body.cardsPerPlayer;
       }
+      await this.persist();
       return new Response(JSON.stringify({ ok: true }));
     }
 
@@ -77,6 +125,7 @@ export class RoomDurableObject implements DurableObject {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    await this.restore();
     if (typeof message !== 'string') return;
 
     let msg: ClientMessage;
@@ -95,13 +144,13 @@ export class RoomDurableObject implements DurableObject {
         this.handleReady(ws);
         break;
       case 'start':
-        this.handleStart(ws);
+        await this.handleStart(ws);
         break;
       case 'select':
-        this.handleSelect(ws, msg.cardIds);
+        await this.handleSelect(ws, msg.cardIds);
         break;
       case 'vote':
-        this.handleVote(ws, msg.cardId);
+        await this.handleVote(ws, msg.cardId);
         break;
       case 'ping':
         this.send(ws, { type: 'pong' });
@@ -161,7 +210,7 @@ export class RoomDurableObject implements DurableObject {
     this.broadcastPlayers();
   }
 
-  private handleStart(ws: WebSocket) {
+  private async handleStart(ws: WebSocket) {
     const player = this.findPlayer(ws);
     if (!player) return;
 
@@ -181,10 +230,10 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
-    this.startGame();
+    await this.startGame();
   }
 
-  private startGame() {
+  private async startGame() {
     this.room.phase = 'dealing';
     this.room.round = 1;
 
@@ -212,9 +261,10 @@ export class RoomDurableObject implements DurableObject {
         this.send(player.ws, { type: 'deal', cards: hand, round: this.room.round });
       }
     }
+    await this.persist();
   }
 
-  private handleSelect(ws: WebSocket, cardIds: string[]) {
+  private async handleSelect(ws: WebSocket, cardIds: string[]) {
     const player = this.findPlayer(ws);
     if (!player || this.room.phase !== 'selecting') return;
 
@@ -250,10 +300,10 @@ export class RoomDurableObject implements DurableObject {
     }
 
     // All selected — pass cards
-    this.passCards();
+    await this.passCards();
   }
 
-  private passCards() {
+  private async passCards() {
     this.room.phase = 'passing';
     const playerIds = [...this.room.players.keys()];
     const playerCount = playerIds.length;
@@ -271,7 +321,7 @@ export class RoomDurableObject implements DurableObject {
 
     // Check convergence: total remaining <= playerCount
     if (totalRemaining <= playerCount) {
-      this.startFinalVote(keptCards);
+      await this.startFinalVote(keptCards);
       return;
     }
 
@@ -303,9 +353,10 @@ export class RoomDurableObject implements DurableObject {
     }
 
     this.broadcast({ type: 'round_complete', remaining: totalRemaining, round: this.room.round });
+    await this.persist();
   }
 
-  private startFinalVote(keptCards: Map<string, Card[]>) {
+  private async startFinalVote(keptCards: Map<string, Card[]>) {
     this.room.phase = 'voting';
     this.room.votes = new Map();
 
@@ -329,9 +380,10 @@ export class RoomDurableObject implements DurableObject {
     }
 
     this.broadcast({ type: 'final_vote', cards: allCards });
+    await this.persist();
   }
 
-  private handleVote(ws: WebSocket, cardId: string) {
+  private async handleVote(ws: WebSocket, cardId: string) {
     const player = this.findPlayer(ws);
     if (!player || this.room.phase !== 'voting') return;
 
@@ -350,7 +402,7 @@ export class RoomDurableObject implements DurableObject {
 
     // Check if all voted
     if (this.room.votes.size >= this.room.players.size) {
-      this.resolveResult();
+      await this.resolveResult();
     } else {
       const pending = [...this.room.players.values()]
         .filter(p => !this.room.votes.has(p.id))
@@ -359,7 +411,7 @@ export class RoomDurableObject implements DurableObject {
     }
   }
 
-  private resolveResult() {
+  private async resolveResult() {
     this.room.phase = 'result';
 
     // Count votes
@@ -393,6 +445,7 @@ export class RoomDurableObject implements DurableObject {
     }
 
     this.broadcast({ type: 'result', card: winnerCard, votes });
+    await this.persist();
   }
 
   private findPlayer(ws: WebSocket): PlayerState | undefined {

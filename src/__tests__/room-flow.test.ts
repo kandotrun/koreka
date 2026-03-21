@@ -109,7 +109,15 @@ class MockRoomNamespace {
     let room = this.rooms.get(id.code);
 
     if (!room) {
-      room = new RoomDurableObject({ acceptWebSocket: vi.fn() } as DurableObjectState, {});
+      const store = new Map<string, unknown>();
+      room = new RoomDurableObject({
+        acceptWebSocket: vi.fn(),
+        storage: {
+          get: vi.fn(async (key: string) => store.get(key)),
+          put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
+          delete: vi.fn(async (key: string) => store.delete(key)),
+        },
+      } as unknown as DurableObjectState, {});
       this.rooms.set(id.code, room);
     }
 

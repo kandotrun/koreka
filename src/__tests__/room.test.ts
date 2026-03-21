@@ -55,8 +55,14 @@ const { RoomDurableObject } = await import('../durable-objects/room');
 // --- Helpers ---
 
 function makeMockState(): DurableObjectState {
+  const store = new Map<string, unknown>();
   return {
     acceptWebSocket: vi.fn(),
+    storage: {
+      get: vi.fn(async (key: string) => store.get(key)),
+      put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
+      delete: vi.fn(async (key: string) => store.delete(key)),
+    },
   } as unknown as DurableObjectState;
 }
 
