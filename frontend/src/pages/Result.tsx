@@ -140,11 +140,51 @@ export default function Result() {
         🤖 ChatGPTに相談する
       </motion.a>
 
+      {/* Share button */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.2 }}
+        onClick={async () => {
+          const shareText = `「${card.text}」に決まった！🎴\n\nこれか！ - みんなの「次どうする？」が決まるゲーム`;
+          const shareUrl = 'https://koreka.ninomiya.run';
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: 'これか！', text: shareText, url: shareUrl });
+            } catch {
+              // user cancelled
+            }
+          } else {
+            await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+            alert('コピーしました！');
+          }
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          marginTop: 'var(--space-md)',
+          width: '100%',
+          maxWidth: 320,
+          padding: '14px 20px',
+          background: 'linear-gradient(135deg, #1DA1F2 0%, #0d8ecf 100%)',
+          color: 'white',
+          borderRadius: 'var(--radius-md)',
+          fontWeight: 700,
+          fontSize: 15,
+          border: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        📤 結果をシェア
+      </motion.button>
+
       {/* Actions */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1.2 }}
+        transition={{ delay: 1.4 }}
         style={{
           display: 'flex',
           gap: 'var(--space-md)',
