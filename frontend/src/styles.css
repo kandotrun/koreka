@@ -40,14 +40,14 @@
   --cat-random: #EF4444;
 }
 
+/* Light theme via OS preference (fallback when no explicit data-theme) */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #F5F5F0;
     --surface: #FFFFFF;
     --accent: #D4A017;
     --text: #1A1A2E;
     --text-sub: #6B6B80;
-
     --border: rgba(0, 0, 0, 0.08);
     --border-strong: rgba(0, 0, 0, 0.12);
     --shadow: rgba(0, 0, 0, 0.08);
@@ -55,6 +55,45 @@
     --overlay: rgba(0, 0, 0, 0.5);
     --swipe-discard-bg: rgba(0, 0, 0, 0.06);
   }
+}
+
+/* Light theme via explicit toggle */
+:root[data-theme="light"] {
+  --bg: #F5F5F0;
+  --surface: #FFFFFF;
+  --accent: #D4A017;
+  --text: #1A1A2E;
+  --text-sub: #6B6B80;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --shadow: rgba(0, 0, 0, 0.08);
+  --shadow-soft: rgba(0, 0, 0, 0.04);
+  --overlay: rgba(0, 0, 0, 0.5);
+  --swipe-discard-bg: rgba(0, 0, 0, 0.06);
+}
+
+/* Auto-scroll marquee for sample cards */
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.marquee-container {
+  overflow: hidden;
+  width: 100%;
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  gap: var(--space-sm);
+  width: max-content;
+  animation: marquee-scroll 30s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
 }
 
 * {

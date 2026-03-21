@@ -1,24 +1,12 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useRoomContext } from '../contexts/RoomContext';
 import { sound } from '../lib/sound';
+import { useTheme } from '../hooks/useTheme';
 
 const avatarColors = ['#FF6B35', '#4ECDC4', '#FFE66D', '#A855F7', '#EC4899', '#EF4444'];
-
-function useIsLight() {
-  const [isLight, setIsLight] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const handler = (e: MediaQueryListEvent) => setIsLight(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return isLight;
-}
 
 export default function Lobby() {
   const { code } = useParams<{ code: string }>();
@@ -48,7 +36,8 @@ export default function Lobby() {
     room.ready();
   };
 
-  const isLight = useIsLight();
+  const { resolved } = useTheme();
+  const isLight = resolved === 'light';
   const isHost = room.playerId === room.hostId;
   const allReady = room.players.length >= 2 && room.players.every(p => p.id === room.hostId || p.ready);
   const roomUrl = typeof window !== 'undefined' ? window.location.href : '';

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useTheme } from '../hooks/useTheme';
 
 const categoryConfig: Record<string, { icon: string; color: string }> = {
   adventure: { icon: '🏔️', color: '#FF6B35' },
@@ -19,13 +20,20 @@ interface SampleCard {
   generated: number;
 }
 
+const themeIcon: Record<string, string> = {
+  system: '🖥️',
+  light: '☀️',
+  dark: '🌙',
+};
+
 export default function Home() {
   const navigate = useNavigate();
+  const { preference, toggle } = useTheme();
   const [mode, setMode] = useState<'home' | 'join' | 'create'>('home');
   const [sampleCards, setSampleCards] = useState<SampleCard[]>([]);
 
   useEffect(() => {
-    fetch('/api/cards/sample?limit=6')
+    fetch('/api/cards/sample?limit=20')
       .then(res => res.json())
       .then(data => setSampleCards(data.cards || []))
       .catch(() => {});
@@ -80,7 +88,31 @@ export default function Home() {
   };
 
   return (
-    <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-xl)' }}>
+    <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-xl)', position: 'relative' }}>
+      {/* テーマ切り替え */}
+      <button
+        onClick={toggle}
+        style={{
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-full)',
+          width: 40,
+          height: 40,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 18,
+          cursor: 'pointer',
+          zIndex: 10,
+        }}
+        title={`テーマ: ${preference}`}
+      >
+        {themeIcon[preference]}
+      </button>
+
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -120,42 +152,52 @@ export default function Home() {
             </p>
           </div>
 
-          {/* お題サンプル */}
+          {/* お題サンプル（自動スクロール） */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
             <p style={{ fontSize: 11, color: 'var(--text-sub)', textAlign: 'center', letterSpacing: '0.1em' }}>
               — お題の例 —
             </p>
-            <div style={{ display: 'flex', gap: 'var(--space-sm)', overflowX: 'auto', paddingBottom: 4 }}>
-              {(sampleCards.length > 0 ? sampleCards : [
+            {(() => {
+              const cards = sampleCards.length > 0 ? sampleCards : [
                 { id: 'f1', text: '夜の海にみんなで行く', category: 'adventure', generated: 0 },
                 { id: 'f2', text: '知らないバーに飛び込む', category: 'night', generated: 0 },
                 { id: 'f3', text: '屋台で一番安いメニューだけで晩ごはん', category: 'food', generated: 0 },
                 { id: 'f4', text: '目を見つめ合って先に逸らした方が負け', category: 'spicy', generated: 0 },
-              ]).map((card, i) => {
-                const cat = categoryConfig[card.category] || { icon: '📋', color: '#8B8B9E' };
-                return (
-                  <motion.div
-                    key={card.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 + i * 0.1 }}
-                    style={{
-                      minWidth: 140,
-                      padding: '12px 14px',
-                      background: `linear-gradient(135deg, ${cat.color}15, ${cat.color}08)`,
-                      border: `1px solid ${cat.color}25`,
-                      borderRadius: 'var(--radius-md)',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span style={{ fontSize: 14 }}>{cat.icon}</span>
-                    <p style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5, color: 'var(--text)' }}>
-                      {card.text}
-                    </p>
-                  </motion.div>
-                );
-              })}
-            </div>
+                { id: 'f5', text: 'コンビニでアイス買って公園で語る', category: 'chill', generated: 0 },
+                { id: 'f6', text: '全員でTikTok撮影チャレンジ', category: 'creative', generated: 0 },
+                { id: 'f7', text: 'じゃんけんで負けた人が奢る', category: 'random', generated: 0 },
+                { id: 'f8', text: 'カラオケで点数バトルする', category: 'night', generated: 0 },
+              ];
+              // duplicate for seamless loop
+              const doubled = [...cards, ...cards];
+              return (
+                <div className="marquee-container">
+                  <div className="marquee-track">
+                    {doubled.map((card, i) => {
+                      const cat = categoryConfig[card.category] || { icon: '📋', color: '#8B8B9E' };
+                      return (
+                        <div
+                          key={`${card.id}-${i}`}
+                          style={{
+                            minWidth: 140,
+                            padding: '12px 14px',
+                            background: `linear-gradient(135deg, ${cat.color}15, ${cat.color}08)`,
+                            border: `1px solid ${cat.color}25`,
+                            borderRadius: 'var(--radius-md)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>{cat.icon}</span>
+                          <p style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5, color: 'var(--text)' }}>
+                            {card.text}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* 使い方 */}
