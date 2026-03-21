@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRoomContext } from '../contexts/RoomContext';
@@ -14,6 +14,39 @@ export default function Game() {
   const { t } = useI18n();
   const [selecting, setSelecting] = useState(false);
   const [soundOn, setSoundOn] = useState(sound.enabled);
+  const [countdown, setCountdown] = useState(30);
+  const [showTimeout, setShowTimeout] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Countdown timer for selecting phase
+  useEffect(() => {
+    if (room.phase === 'selecting' && room.cards.length > 0 && !selecting) {
+      setCountdown(30);
+      timerRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    }
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, [room.phase, room.cards, selecting]);
+
+  // Handle selection timeout error
+  useEffect(() => {
+    if (room.error === 'selection_timeout') {
+      setSelecting(true);
+      setShowTimeout(true);
+      const timer = setTimeout(() => setShowTimeout(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [room.error]);
 
   // 新しいカードが来たら選択状態をリセット
   useEffect(() => {
@@ -57,7 +90,34 @@ export default function Game() {
   // 選別フェーズ
   if (room.phase === 'selecting' && room.cards.length > 0 && !selecting) {
     return (
-      <div className="page" style={{ padding: 'var(--space-md)' }}>
+      <div className="page" role="main" style={{ padding: 'var(--space-md)' }}>
+        {/* タイムアウト通知 */}
+        <AnimatePresence>
+          {showTimeout && (
+            <motion.div
+              initial={{ opacity: 0, y: -40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -40 }}
+              style={{
+                position: 'fixed',
+                top: 16,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'var(--danger)',
+                color: 'white',
+                padding: '10px 20px',
+                borderRadius: 'var(--radius-md)',
+                fontWeight: 700,
+                fontSize: 14,
+                zIndex: 50,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('game.timeout')}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ヘッダー */}
         <div style={{
           width: '100%',
@@ -66,12 +126,23 @@ export default function Game() {
           alignItems: 'center',
           marginBottom: 'var(--space-md)',
         }}>
-          <span style={{ color: 'var(--text-sub)', fontSize: 14 }}>
-            Round {room.round}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <span style={{ color: 'var(--text-sub)', fontSize: 14 }}>
+              Round {room.round}
+            </span>
+            <span style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: countdown <= 10 ? 'var(--danger)' : 'var(--text-sub)',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {countdown}s
+            </span>
+          </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button
               onClick={() => { sound.toggle(); setSoundOn(sound.enabled); }}
+              aria-label={soundOn ? 'Sound ON' : 'Sound OFF'}
               style={{
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
@@ -111,7 +182,7 @@ export default function Game() {
   // 最終投票フェーズ
   if (room.phase === 'voting' && room.survivors.length > 0 && !voted) {
     return (
-      <div className="page" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
+      <div className="page" role="main" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
         <motion.h2
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -151,7 +222,7 @@ export default function Game() {
 
   // 待機状態
   return (
-    <div className="page" style={{ justifyContent: 'center' }}>
+    <div className="page" role="main" style={{ justifyContent: 'center' }}>
       <motion.div
         animate={{ opacity: [0.5, 1, 0.5] }}
         transition={{ duration: 2, repeat: Infinity }}
@@ -161,7 +232,7 @@ export default function Game() {
           {selecting ? t('game.waiting_others') : t('game.dealing')}
         </p>
         {room.pending.length > 0 && (
-          <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>
+          <p aria-live="polite" style={{ color: 'var(--text-sub)', fontSize: 14 }}>
             {t('game.selecting', room.pending.join('、'))}
           </p>
         )}

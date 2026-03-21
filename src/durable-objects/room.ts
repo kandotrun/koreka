@@ -48,6 +48,8 @@ export class RoomDurableObject implements DurableObject {
   private env: Env;
   private room: InternalRoomState;
   private initialized = false;
+  private selectionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private originalDeck: Card[] = [];
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -81,6 +83,7 @@ export class RoomDurableObject implements DurableObject {
       this.room.phase = saved.phase;
       this.room.hostId = saved.hostId;
       this.room.deck = saved.deck;
+      this.originalDeck = [...saved.deck];
       this.room.cardsPerPlayer = saved.cardsPerPlayer;
       this.room.round = saved.round;
       this.room.survivors = saved.survivors || [];
@@ -156,6 +159,7 @@ export class RoomDurableObject implements DurableObject {
       }
       this.room.code = body.code;
       this.room.deck = body.cards;
+      this.originalDeck = [...body.cards];
       if (body.cardsPerPlayer && body.cardsPerPlayer > 0 && body.cardsPerPlayer <= 50) {
         this.room.cardsPerPlayer = body.cardsPerPlayer;
       }
@@ -210,6 +214,12 @@ export class RoomDurableObject implements DurableObject {
         break;
       case 'vote':
         await this.handleVote(ws, msg.cardId);
+        break;
+      case 'restart':
+        await this.handleRestart(ws);
+        break;
+      case 'kick':
+        await this.handleKick(ws, msg.playerId);
         break;
       case 'ping':
         this.send(ws, { type: 'pong' });
@@ -367,6 +377,7 @@ export class RoomDurableObject implements DurableObject {
         this.send(player.ws, { type: 'deal', cards: hand, round: this.room.round });
       }
     }
+    this.startSelectionTimers();
     await this.persist();
   }
 
@@ -392,6 +403,7 @@ export class RoomDurableObject implements DurableObject {
 
     player.selectedCards = cardIds;
     this.saveAttachment(player);
+    this.clearSelectionTimer(player.id);
 
     // Check if all players have selected
     const allSelected = [...this.room.players.values()].every(p => p.selectedCards.length > 0);
@@ -404,6 +416,7 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
+    this.clearAllSelectionTimers();
     await this.passCards();
   }
 
@@ -452,6 +465,7 @@ export class RoomDurableObject implements DurableObject {
       }
     }
 
+    this.startSelectionTimers();
     this.broadcast({ type: 'round_complete', remaining: totalRemaining, round: this.room.round });
     await this.persist();
   }
@@ -549,6 +563,130 @@ export class RoomDurableObject implements DurableObject {
     } catch {
       // D1 write failure is non-fatal for game flow
     }
+  }
+
+  private startSelectionTimers() {
+    this.clearAllSelectionTimers();
+    for (const [playerId, player] of this.room.players) {
+      if (player.selectedCards.length === 0) {
+        const timer = setTimeout(() => {
+          this.handleSelectionTimeout(playerId);
+        }, 30_000);
+        this.selectionTimers.set(playerId, timer);
+      }
+    }
+  }
+
+  private clearSelectionTimer(playerId: string) {
+    const timer = this.selectionTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      this.selectionTimers.delete(playerId);
+    }
+  }
+
+  private clearAllSelectionTimers() {
+    for (const timer of this.selectionTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.selectionTimers.clear();
+  }
+
+  private async handleSelectionTimeout(playerId: string) {
+    this.selectionTimers.delete(playerId);
+    const player = this.room.players.get(playerId);
+    if (!player || this.room.phase !== 'selecting') return;
+    if (player.selectedCards.length > 0) return;
+
+    const hand = this.room.hands.get(playerId);
+    if (!hand || hand.length === 0) return;
+
+    // Auto-select random half (keep half, discard half), minimum 1 kept
+    const shuffled = [...hand];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const keepCount = Math.max(1, Math.floor(hand.length / 2));
+    const keptIds = shuffled.slice(0, keepCount).map(c => c.id);
+
+    player.selectedCards = keptIds;
+    this.saveAttachment(player);
+
+    // Notify the timed-out player
+    this.send(player.ws, { type: 'error', message: 'selection_timeout' });
+
+    // Check if all players have selected
+    const allSelected = [...this.room.players.values()].every(p => p.selectedCards.length > 0);
+    if (allSelected) {
+      this.clearAllSelectionTimers();
+      await this.passCards();
+    } else {
+      const pending = [...this.room.players.values()]
+        .filter(p => p.selectedCards.length === 0)
+        .map(p => p.name);
+      this.broadcast({ type: 'waiting', pending });
+    }
+  }
+
+  private async handleRestart(ws: WebSocket) {
+    const player = this.findPlayer(ws);
+    if (!player) return;
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'error', message: 'not_host' });
+      return;
+    }
+
+    this.clearAllSelectionTimers();
+
+    // Reset room state
+    this.room.phase = 'waiting';
+    this.room.round = 0;
+    this.room.hands = new Map();
+    this.room.votes = new Map();
+    this.room.survivors = [];
+    this.room.result = null;
+    this.room.deck = [...this.originalDeck];
+
+    for (const p of this.room.players.values()) {
+      p.ready = false;
+      p.selectedCards = [];
+      this.saveAttachment(p);
+    }
+
+    await this.persist();
+    this.broadcast({ type: 'restart' });
+    this.broadcastPlayers();
+  }
+
+  private async handleKick(ws: WebSocket, targetPlayerId: string) {
+    const player = this.findPlayer(ws);
+    if (!player) return;
+
+    if (player.id !== this.room.hostId) {
+      this.send(ws, { type: 'error', message: 'not_host' });
+      return;
+    }
+
+    const target = this.room.players.get(targetPlayerId);
+    if (!target || target.id === this.room.hostId) return;
+
+    // Notify kicked player
+    this.send(target.ws, { type: 'error', message: 'kicked' });
+
+    // Close their WebSocket
+    if (target.ws) {
+      try { target.ws.close(1000, 'kicked'); } catch {}
+    }
+
+    // Remove from room
+    this.room.players.delete(targetPlayerId);
+    this.room.hands.delete(targetPlayerId);
+    this.clearSelectionTimer(targetPlayerId);
+
+    await this.persist();
+    this.broadcastPlayers();
   }
 
   private findPlayer(ws: WebSocket): PlayerState | undefined {

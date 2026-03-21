@@ -167,7 +167,7 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
       </AnimatePresence>
 
       {/* Card stack */}
-      <div style={{ position: 'relative', width: 280, aspectRatio: '3/4' }} {...bind}>
+      <div style={{ position: 'relative', width: 280, aspectRatio: '3/4' }} aria-label={`カード: ${currentCard.text}`} {...bind}>
         {/* Next card preview (behind) */}
         {currentIndex + 1 < cards.length && (
           <div style={{

@@ -110,12 +110,33 @@ export function useRoom(code: string | undefined) {
             result: { card: msg.card, votes: msg.votes },
           }));
           break;
+        case 'restart':
+          setState(s => ({
+            ...s,
+            phase: 'waiting',
+            cards: [],
+            round: 0,
+            pending: [],
+            survivors: [],
+            result: null,
+            error: null,
+          }));
+          break;
         case 'error':
           console.error('Room error:', msg.message);
           // 致命的エラー（参加不可）
           if (msg.message === 'room_full' || msg.message === 'game_in_progress') {
             setState(s => ({ ...s, error: msg.message }));
             ws.close();
+            break;
+          }
+          if (msg.message === 'kicked') {
+            setState(s => ({ ...s, error: 'kicked' }));
+            ws.close();
+            break;
+          }
+          if (msg.message === 'selection_timeout') {
+            setState(s => ({ ...s, error: 'selection_timeout' }));
             break;
           }
           if (msg.message === 'invalid_selection') {
@@ -151,6 +172,8 @@ export function useRoom(code: string | undefined) {
   const start = useCallback(() => sendMessage({ type: 'start' }), [sendMessage]);
   const select = useCallback((cardIds: string[]) => sendMessage({ type: 'select', cardIds }), [sendMessage]);
   const vote = useCallback((cardId: string) => sendMessage({ type: 'vote', cardId }), [sendMessage]);
+  const restart = useCallback(() => sendMessage({ type: 'restart' }), [sendMessage]);
+  const kick = useCallback((playerId: string) => sendMessage({ type: 'kick', playerId }), [sendMessage]);
 
   useEffect(() => {
     if (!code || wsRef.current) return;
@@ -187,5 +210,7 @@ export function useRoom(code: string | undefined) {
     start,
     select,
     vote,
+    restart,
+    kick,
   };
 }

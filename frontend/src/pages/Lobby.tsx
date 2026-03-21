@@ -52,10 +52,11 @@ export default function Lobby() {
     const errorMessages: Record<string, { title: string; desc: string }> = {
       room_full: { title: t('lobby.room_full_title'), desc: t('lobby.room_full_desc') },
       game_in_progress: { title: t('lobby.game_in_progress_title'), desc: t('lobby.game_in_progress_desc') },
+      kicked: { title: t('lobby.kicked_title'), desc: t('lobby.kicked_desc') },
     };
     const err = errorMessages[room.error] || { title: t('common.error'), desc: room.error };
     return (
-      <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-lg)', textAlign: 'center' }}>
+      <div className="page" role="main" style={{ justifyContent: 'center', gap: 'var(--space-lg)', textAlign: 'center' }}>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
           <div style={{ fontSize: 48, marginBottom: 'var(--space-md)' }}>🚫</div>
           <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{err.title}</h2>
@@ -78,7 +79,7 @@ export default function Lobby() {
       room.connect(name);
     };
     return (
-      <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-xl)' }}>
+      <div className="page" role="main" style={{ justifyContent: 'center', gap: 'var(--space-xl)' }}>
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} style={{ textAlign: 'center' }}>
           <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>{t('lobby.join_room', code || '')}</p>
         </motion.div>
@@ -98,6 +99,7 @@ export default function Lobby() {
               placeholder={t('home.name_placeholder')}
               maxLength={10}
               autoFocus
+              aria-label={t('home.name_label')}
               style={{
                 width: '100%',
                 height: 48,
@@ -119,7 +121,7 @@ export default function Lobby() {
   }
 
   return (
-    <div className="page" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
+    <div className="page" role="main" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
       <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>{t('lobby.room')}</p>
 
       {/* ルームコード */}
@@ -222,7 +224,7 @@ export default function Lobby() {
       }} />
 
       {/* 参加者一覧 */}
-      <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+      <div aria-live="polite" style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
         <AnimatePresence>
           {room.players.map((player, i) => (
             <motion.div
@@ -273,6 +275,30 @@ export default function Lobby() {
               <span style={{ fontSize: 14, color: player.ready ? 'var(--success)' : 'var(--text-sub)' }}>
                 {player.ready ? t('lobby.ready') : t('lobby.waiting')}
               </span>
+
+              {/* キックボタン (host only, non-host players) */}
+              {isHost && player.id !== room.hostId && (
+                <button
+                  onClick={() => {
+                    if (confirm(t('lobby.kick_confirm', player.name))) {
+                      room.kick(player.id);
+                    }
+                  }}
+                  aria-label={`Kick ${player.name}`}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-sub)',
+                    cursor: 'pointer',
+                    fontSize: 16,
+                    padding: '0 4px',
+                    lineHeight: 1,
+                    opacity: 0.5,
+                  }}
+                >
+                  ✕
+                </button>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>
@@ -282,6 +308,7 @@ export default function Lobby() {
       <div style={{ width: '100%', maxWidth: 320, display: 'flex', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
         <button
           onClick={() => { sound.toggle(); setSoundOn(sound.enabled); }}
+          aria-label={soundOn ? 'Sound ON' : 'Sound OFF'}
           style={{
             background: 'var(--surface)',
             border: '1px solid var(--border)',

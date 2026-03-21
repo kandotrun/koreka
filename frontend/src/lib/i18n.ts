@@ -91,6 +91,17 @@ const translations: Record<string, Record<Lang, string>> = {
   'lobby.join_room': { ja: 'ルーム {0} に参加', en: 'Join Room {0}', ko: '방 {0} 에 참가' },
   'lobby.join_btn': { ja: '参加する 🎴', en: 'Join 🎴', ko: '참가하기 🎴' },
   'lobby.go_home': { ja: 'トップに戻る', en: 'Go Home', ko: '홈으로 돌아가기' },
+  'lobby.kick_confirm': {
+    ja: '{0} をルームから退出させますか？',
+    en: 'Remove {0} from the room?',
+    ko: '{0}을(를) 방에서 내보내시겠습니까?',
+  },
+  'lobby.kicked_title': { ja: 'ルームから退出させられました', en: 'You were removed', ko: '방에서 퇴장당했습니다' },
+  'lobby.kicked_desc': {
+    ja: 'ホストによってルームから退出させられました。',
+    en: 'You were removed from the room by the host.',
+    ko: '호스트에 의해 방에서 퇴장당했습니다.',
+  },
   'lobby.room_full_title': { ja: 'ルームが満員です', en: 'Room is Full', ko: '방이 가득 찼습니다' },
   'lobby.room_full_desc': {
     ja: 'このルームは最大人数（8人）に達しています。',
@@ -114,6 +125,12 @@ const translations: Record<string, Record<Lang, string>> = {
   },
   'game.dealing': { ja: 'カードを配布中...', en: 'Dealing cards...', ko: '카드 배분 중...' },
   'game.selecting': { ja: '{0} が選択中', en: '{0} selecting', ko: '{0} 선택 중' },
+  'game.timeout': {
+    ja: 'タイムアウト - ランダムに選択されました',
+    en: 'Timeout - cards were randomly selected',
+    ko: '시간 초과 - 카드가 랜덤으로 선택되었습니다',
+  },
+  'game.time_remaining': { ja: '残り{0}秒', en: '{0}s left', ko: '{0}초 남음' },
 
   // ===== Result =====
   'result.vote_count': {
@@ -134,6 +151,11 @@ const translations: Record<string, Record<Lang, string>> = {
     ko: '"{0}"(으)로 결정! ({1}/{2}명이 선택) 🎴\n\nKoreka! — 다 같이 "다음 뭐 할까?"를 정하는 게임',
   },
   'result.play_again': { ja: 'もう一回', en: 'Play Again', ko: '한 번 더' },
+  'result.waiting_host_restart': {
+    ja: 'ホストの再開を待っています...',
+    en: 'Waiting for host to restart...',
+    ko: '호스트의 재시작을 기다리는 중...',
+  },
   'result.save_memory': { ja: '思い出記録', en: 'Save Memory', ko: '추억 기록' },
   'result.memory_title': { ja: '思い出を記録', en: 'Save a Memory', ko: '추억 기록하기' },
   'result.memory_desc': {
