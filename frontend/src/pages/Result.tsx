@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Card from '../components/Card';
 import type { Card as CardType, PlayerInfo } from '../../../src/types';
 import { sound } from '../lib/sound';
@@ -47,6 +47,9 @@ export default function Result() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [showMemoryModal, setShowMemoryModal] = useState(false);
+  const [memoryComment, setMemoryComment] = useState('');
+  const [memorySaving, setMemorySaving] = useState(false);
   const state = location.state as {
     card: CardType;
     votes: Record<string, string>;
@@ -62,8 +65,37 @@ export default function Result() {
   const voteCount = Object.values(votes).filter(v => v === card.id).length;
   const totalPlayers = players.length;
 
+  const handleSaveMemory = async () => {
+    if (!memoryComment.trim() || !code) return;
+    setMemorySaving(true);
+    try {
+      const res = await fetch(`/api/rooms/${code}/memories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: memoryComment.trim() }),
+      });
+      if (res.ok) {
+        setShowMemoryModal(false);
+        alert('思い出を保存しました！');
+        navigate('/');
+      }
+    } catch {
+      alert('保存に失敗しました');
+    } finally {
+      setMemorySaving(false);
+    }
+  };
+
   useEffect(() => {
     sound.play('result');
+    // Fire-and-forget: save result card to D1
+    if (code && card?.id) {
+      fetch(`/api/rooms/${code}/result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId: card.id }),
+      }).catch(() => {});
+    }
   }, []);
 
   return (
@@ -203,14 +235,89 @@ export default function Result() {
         <button
           className="btn-primary"
           style={{ flex: 1 }}
-          onClick={() => {
-            // Future: memory recording
-            navigate('/');
-          }}
+          onClick={() => setShowMemoryModal(true)}
         >
           思い出記録
         </button>
       </motion.div>
+
+      {/* Memory Recording Modal */}
+      <AnimatePresence>
+        {showMemoryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowMemoryModal(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 100,
+              padding: 'var(--space-md)',
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'var(--surface)',
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--space-xl)',
+                width: '100%',
+                maxWidth: 360,
+              }}
+            >
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 'var(--space-md)' }}>
+                思い出を記録
+              </h2>
+              <p style={{ fontSize: 14, color: 'var(--text-sub)', marginBottom: 'var(--space-md)' }}>
+                「{card.text}」の思い出コメントを残そう
+              </p>
+              <textarea
+                value={memoryComment}
+                onChange={(e) => setMemoryComment(e.target.value)}
+                placeholder="楽しかった！また来よう..."
+                maxLength={500}
+                style={{
+                  width: '100%',
+                  minHeight: 100,
+                  padding: 'var(--space-sm)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--text-sub)',
+                  background: 'var(--bg)',
+                  color: 'var(--text)',
+                  fontSize: 14,
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-md)' }}>
+                <button
+                  className="btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowMemoryModal(false)}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="btn-primary"
+                  style={{ flex: 1 }}
+                  disabled={!memoryComment.trim() || memorySaving}
+                  onClick={handleSaveMemory}
+                >
+                  {memorySaving ? '保存中...' : '保存する'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

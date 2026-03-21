@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './env';
+import type { Card, CardCategory } from './types';
 import roomsRouter from './routes/rooms';
 import wsRouter from './routes/ws';
 
@@ -89,6 +90,191 @@ app.get('/api/cards/sample', async (c) => {
 app.get('/api/cards/count', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT COUNT(*) as total FROM cards WHERE ${ACTIVE_FILTER}`).all<{ total: number }>();
   return c.json({ total: results?.[0]?.total || 0 });
+});
+
+// --- Feature 1: AI On-Demand Card Generation ---
+
+// Simple in-memory rate limiter (max 3 calls per minute)
+const rateLimitState = { timestamps: [] as number[] };
+
+app.post('/api/cards/generate', async (c) => {
+  const now = Date.now();
+  rateLimitState.timestamps = rateLimitState.timestamps.filter(t => now - t < 60_000);
+  if (rateLimitState.timestamps.length >= 3) {
+    return c.json({ error: 'rate_limit_exceeded' }, 429);
+  }
+  rateLimitState.timestamps.push(now);
+
+  const body = await c.req.json<{
+    context?: { time?: string; mood?: string; playerCount?: number };
+    count: number;
+  }>();
+
+  const count = Math.min(Math.max(1, body.count || 1), 10);
+  const ctx = body.context || {};
+
+  const prompt = [
+    'あなたは「これか！」というカードゲームのお題生成AIです。',
+    '友達同士で「次何する？」を決めるためのユニークで楽しいお題カードを生成してください。',
+    ctx.time ? `時間帯: ${ctx.time}` : '',
+    ctx.mood ? `気分: ${ctx.mood}` : '',
+    ctx.playerCount ? `人数: ${ctx.playerCount}人` : '',
+    `${count}枚のカードを生成してください。`,
+    'JSONの配列で返してください。各要素は { "text": "お題テキスト", "category": "カテゴリ" } の形式です。',
+    `カテゴリは次のいずれか: ${ALL_CATEGORIES.join(', ')}`,
+    'お題は短く（30文字以内）、具体的で面白いものにしてください。',
+    'JSON配列のみを返してください。説明やコードブロックは不要です。',
+  ].filter(Boolean).join('\n');
+
+  const apiKey = c.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return c.json({ error: 'gemini_api_key_not_configured' }, 500);
+  }
+
+  const geminiRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+      }),
+    }
+  );
+
+  if (!geminiRes.ok) {
+    return c.json({ error: 'gemini_api_error' }, 502);
+  }
+
+  const geminiData = await geminiRes.json<{
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  }>();
+
+  const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // Extract JSON array from response (handle possible markdown code blocks)
+  const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    return c.json({ error: 'invalid_gemini_response' }, 502);
+  }
+
+  let generated: Array<{ text: string; category: string }>;
+  try {
+    generated = JSON.parse(jsonMatch[0]);
+  } catch {
+    return c.json({ error: 'invalid_gemini_response' }, 502);
+  }
+
+  const cards: Card[] = [];
+  const stmts = [];
+
+  for (const item of generated.slice(0, count)) {
+    const category = ALL_CATEGORIES.includes(item.category) ? item.category : 'random';
+    const id = `gen-${crypto.randomUUID().slice(0, 8)}`;
+    const card: Card = {
+      id,
+      text: item.text.slice(0, 100),
+      category: category as CardCategory,
+      generated: true,
+    };
+    cards.push(card);
+    stmts.push(
+      c.env.DB.prepare(
+        'INSERT INTO cards (id, text, category, generated) VALUES (?, ?, ?, 1)'
+      ).bind(id, card.text, card.category)
+    );
+  }
+
+  if (stmts.length > 0) {
+    await c.env.DB.batch(stmts);
+  }
+
+  return c.json({ cards });
+});
+
+// --- Feature 2: Memory Recording (思い出記録) ---
+
+app.post('/api/rooms/:code/memories', async (c) => {
+  const code = c.req.param('code');
+  const body = await c.req.json<{ comment: string }>();
+
+  if (!body.comment || typeof body.comment !== 'string' || body.comment.trim().length === 0) {
+    return c.json({ error: 'comment_required' }, 400);
+  }
+
+  // Look up room by code
+  const room = await c.env.DB.prepare('SELECT id FROM rooms WHERE code = ?').bind(code).first<{ id: string }>();
+  if (!room) {
+    return c.json({ error: 'room_not_found' }, 404);
+  }
+
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    'INSERT INTO memories (id, room_id, comment, created_at) VALUES (?, ?, ?, datetime(\'now\'))'
+  ).bind(id, room.id, body.comment.trim().slice(0, 500)).run();
+
+  return c.json({ id, comment: body.comment.trim().slice(0, 500) }, 201);
+});
+
+app.get('/api/rooms/:code/memories', async (c) => {
+  const code = c.req.param('code');
+
+  const room = await c.env.DB.prepare('SELECT id FROM rooms WHERE code = ?').bind(code).first<{ id: string }>();
+  if (!room) {
+    return c.json({ error: 'room_not_found' }, 404);
+  }
+
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, comment, created_at FROM memories WHERE room_id = ? ORDER BY created_at DESC'
+  ).bind(room.id).all<{ id: string; comment: string; created_at: string }>();
+
+  return c.json({ memories: results || [] });
+});
+
+// Save result card for a room (called from frontend after result is displayed)
+app.post('/api/rooms/:code/result', async (c) => {
+  const code = c.req.param('code');
+  const body = await c.req.json<{ cardId: string }>();
+
+  if (!body.cardId || typeof body.cardId !== 'string') {
+    return c.json({ error: 'card_id_required' }, 400);
+  }
+
+  const result = await c.env.DB.prepare(
+    'UPDATE rooms SET result_card_id = ? WHERE code = ?'
+  ).bind(body.cardId, code).run();
+
+  if (!result.meta.changes) {
+    return c.json({ error: 'room_not_found' }, 404);
+  }
+
+  return c.json({ ok: true });
+});
+
+// --- Feature 3: Admin Stats ---
+
+// TODO: Add authentication (e.g. Bearer token or basic auth) before production use
+app.get('/api/admin/stats', async (c) => {
+  const [cardsRes, roomsRes, memoriesRes, topCardsRes] = await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) as total FROM cards WHERE ${ACTIVE_FILTER}`).first<{ total: number }>(),
+    c.env.DB.prepare('SELECT COUNT(*) as total FROM rooms').first<{ total: number }>(),
+    c.env.DB.prepare('SELECT COUNT(*) as total FROM memories').first<{ total: number }>(),
+    c.env.DB.prepare(
+      `SELECT c.text, c.category, COUNT(*) as timesSelected
+       FROM rooms r
+       JOIN cards c ON r.result_card_id = c.id
+       WHERE r.result_card_id IS NOT NULL
+       GROUP BY r.result_card_id
+       ORDER BY timesSelected DESC
+       LIMIT 20`
+    ).all<{ text: string; category: string; timesSelected: number }>(),
+  ]);
+
+  return c.json({
+    totalCards: cardsRes?.total || 0,
+    totalRooms: roomsRes?.total || 0,
+    totalMemories: memoriesRes?.total || 0,
+    topCards: topCardsRes.results || [],
+  });
 });
 
 export default app;

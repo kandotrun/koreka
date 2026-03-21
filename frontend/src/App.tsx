@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Lobby from './pages/Lobby';
 import Game from './pages/Game';
 import Result from './pages/Result';
+import Admin from './pages/Admin';
 
 function RoomRoutes() {
   const { code } = useParams<{ code: string }>();
@@ -23,6 +24,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="/:code/*" element={<RoomRoutes />} />
       </Routes>
     </BrowserRouter>
