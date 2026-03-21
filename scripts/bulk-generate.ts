@@ -32,6 +32,8 @@ const CATEGORIES = [
   { id: 'creative', name: 'クリエイティブ', emoji: '🎨', description: '創造的でユニークな活動' },
   { id: 'random', name: 'カオス', emoji: '🎲', description: '予測不能でカオスな体験' },
   { id: 'spicy', name: 'スパイシー', emoji: '🔥', description: '攻めた・ちょっとドキドキする体験' },
+  { id: 'trending', name: '時事ネタ', emoji: '📰', description: '最近の話題・流行・ミーム・バズったものに関連する遊び' },
+  { id: 'seasonal', name: '季節', emoji: '🌸', description: '今の季節ならではの遊びや体験（花見、花火、雪遊び等）' },
 ];
 
 const validCategories = new Set(CATEGORIES.map(c => c.id));

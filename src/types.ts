@@ -7,7 +7,7 @@ export interface Card {
   generated: boolean;
 }
 
-export type CardCategory = 'adventure' | 'chill' | 'food' | 'night' | 'creative' | 'random' | 'spicy';
+export type CardCategory = 'adventure' | 'chill' | 'food' | 'night' | 'creative' | 'random' | 'spicy' | 'trending' | 'seasonal';
 
 export interface Player {
   id: string;

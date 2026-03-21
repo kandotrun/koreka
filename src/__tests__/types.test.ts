@@ -135,7 +135,7 @@ describe('WebSocket メッセージ型チェック', () => {
   describe('Card 型', () => {
     it('全カテゴリが CardCategory に含まれる', () => {
       const categories: CardCategory[] = [
-        'adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy',
+        'adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy', 'trending', 'seasonal',
       ];
       expectTypeOf(categories).toMatchTypeOf<CardCategory[]>();
     });

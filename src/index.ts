@@ -55,7 +55,7 @@ app.get('/api/cards/sample', async (c) => {
   }
 
   // All categories — pick evenly from each
-  const categories = ['adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy'];
+  const categories = ['adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy', 'trending', 'seasonal'];
   const perCat = Math.max(Math.ceil(limit / categories.length), 2);
   const all: CardRow[] = [];
   for (const cat of categories) {

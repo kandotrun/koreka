@@ -11,6 +11,8 @@ const categoryConfig: Record<string, { icon: string; color: string }> = {
   creative: { icon: '🎨', color: '#EC4899' },
   random: { icon: '🎲', color: '#EF4444' },
   spicy: { icon: '🔥', color: '#F43F5E' },
+  trending: { icon: '📰', color: '#3B82F6' },
+  seasonal: { icon: '🌸', color: '#F59E0B' },
 };
 
 interface SampleCard {
