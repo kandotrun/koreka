@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && cd frontend && npx tsc --noEmit",
-    "generate-cards": "npx tsx scripts/generate-cards.ts"
+    "generate-cards": "npx tsx scripts/generate-cards.ts",
+    "bulk-generate": "npx tsx scripts/bulk-generate.ts"
   },
   "dependencies": {
     "framer-motion": "^12.38.0",
