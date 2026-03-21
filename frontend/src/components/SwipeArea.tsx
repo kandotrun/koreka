@@ -28,18 +28,26 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
 
   const handleKeep = useCallback(() => {
     if (!currentCard) return;
+
+    // 最後のカードで全部キープ済み → 強制パス（最低1枚捨てる必要あり）
+    if (isLast && keptCards.length === cards.length - 1) {
+      sound.play('swipeDiscard');
+      setExitX(-300);
+      onComplete(keptCards);
+      return;
+    }
+
     sound.play('swipeKeep');
     const newKept = [...keptCards, currentCard.id];
     setKeptCards(newKept);
     setExitX(300);
 
     if (currentIndex >= cards.length - 1) {
-      // All cards swiped
       onComplete(newKept);
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentCard, keptCards, currentIndex, cards.length, onComplete]);
+  }, [currentCard, keptCards, currentIndex, cards.length, isLast, onComplete]);
 
   const handleDiscard = useCallback(() => {
     if (!currentCard) return;
