@@ -171,7 +171,7 @@ export class RoomDurableObject implements DurableObject {
     if (existingId && this.room.players.has(existingId)) {
       const player = this.room.players.get(existingId)!;
       player.ws = ws;
-      player.name = name; // 名前更新も許可
+      player.name = name;
 
       this.send(ws, {
         type: 'welcome',
@@ -193,6 +193,7 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
+    // ゲーム中は新規参加ブロック（再接続のみ許可）
     if (this.room.phase !== 'waiting') {
       this.send(ws, { type: 'error', message: 'game_in_progress' });
       return;
@@ -485,6 +486,14 @@ export class RoomDurableObject implements DurableObject {
     const player = this.findPlayer(ws);
     if (!player) return;
 
+    // ゲーム中はプレイヤーを削除しない（再接続で復帰できるように）
+    // WSだけ無効化しておく
+    if (this.room.phase !== 'waiting') {
+      // @ts-expect-error null ws marker for disconnected player
+      player.ws = null;
+      return;
+    }
+
     this.room.players.delete(player.id);
     this.room.hands.delete(player.id);
 
@@ -519,7 +528,8 @@ export class RoomDurableObject implements DurableObject {
     }));
   }
 
-  private send(ws: WebSocket, msg: ServerMessage) {
+  private send(ws: WebSocket | null, msg: ServerMessage) {
+    if (!ws) return;
     try {
       ws.send(JSON.stringify(msg));
     } catch {
