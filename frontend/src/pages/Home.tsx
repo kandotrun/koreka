@@ -40,19 +40,61 @@ export default function Home() {
       .then(data => setSampleCards(data.cards || []))
       .catch(() => {});
   }, []);
+  const allCategories = Object.keys(categoryConfig) as Array<keyof typeof categoryConfig>;
+  const categoryLabels: Record<string, string> = {
+    adventure: '冒険',
+    chill: 'まったり',
+    food: 'グルメ',
+    night: '夜遊び',
+    creative: 'クリエイティブ',
+    random: 'カオス',
+    spicy: 'スパイシー',
+    trending: '時事ネタ',
+    seasonal: '季節',
+  };
+
   const [name, setName] = useState('');
   const [code, setCode] = useState(['', '', '', '']);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set(allCategories));
   const [loading, setLoading] = useState(false);
   const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) {
+        next.delete(cat);
+      } else {
+        next.add(cat);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedCategories.size === allCategories.length) {
+      setSelectedCategories(new Set());
+    } else {
+      setSelectedCategories(new Set(allCategories));
+    }
+  };
 
   const handleCreateRoom = async () => {
     if (!name.trim()) return;
     setLoading(true);
     try {
+      const settings: Record<string, unknown> = {};
+      // 全選択 or 0選択 = 全カテゴリ（フィルターなし）
+      if (selectedCategories.size > 0 && selectedCategories.size < allCategories.length) {
+        settings.categories = Array.from(selectedCategories);
+      }
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostName: name }),
+        body: JSON.stringify({
+          hostName: name,
+          ...(Object.keys(settings).length > 0 ? { settings } : {}),
+        }),
       });
       const data = await res.json();
       // Store name for WebSocket join
@@ -308,6 +350,69 @@ export default function Home() {
               }}
             />
           </div>
+
+          {/* Category select (create mode only) */}
+          {mode === 'create' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-sub)' }}>
+                  カテゴリ
+                </label>
+                <button
+                  onClick={toggleAll}
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--primary)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  {selectedCategories.size === allCategories.length ? 'すべて解除' : 'すべて選択'}
+                </button>
+              </div>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}>
+                {allCategories.map(cat => {
+                  const cfg = categoryConfig[cat];
+                  const selected = selectedCategories.has(cat);
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => toggleCategory(cat)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-full)',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        border: `1.5px solid ${selected ? cfg.color : 'var(--border)'}`,
+                        background: selected ? `${cfg.color}18` : 'var(--surface)',
+                        color: selected ? cfg.color : 'var(--text-sub)',
+                        transition: 'all 0.15s ease',
+                        opacity: selected ? 1 : 0.6,
+                      }}
+                    >
+                      <span style={{ fontSize: 14 }}>{cfg.icon}</span>
+                      {categoryLabels[cat]}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedCategories.size === 0 && (
+                <p style={{ fontSize: 11, color: 'var(--text-sub)', marginTop: 6 }}>
+                  未選択の場合はすべてのカテゴリから出題されます
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Code input (join mode only) */}
           {mode === 'join' && (
