@@ -144,7 +144,7 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
               position: 'absolute',
               top: 60,
               right: 24,
-              background: 'rgba(255,255,255,0.1)',
+              background: 'var(--swipe-discard-bg)',
               color: 'var(--text-sub)',
               padding: '8px 16px',
               borderRadius: 'var(--radius-md)',
@@ -207,8 +207,8 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
                 boxShadow: direction === 'right'
                   ? '0 0 40px rgba(255,107,53,0.3)'
                   : direction === 'left'
-                    ? '0 0 40px rgba(0,0,0,0.5)'
-                    : '0 8px 32px rgba(0,0,0,0.4)',
+                    ? '0 0 40px var(--shadow)'
+                    : '0 8px 32px var(--shadow)',
               }}
             />
           </motion.div>

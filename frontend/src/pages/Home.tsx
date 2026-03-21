@@ -111,7 +111,7 @@ export default function Home() {
             background: 'var(--surface)',
             borderRadius: 'var(--radius-lg)',
             padding: 'var(--space-lg)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: '1px solid var(--border)',
           }}>
             <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--text)' }}>
               カードをスワイプして<br />
@@ -225,7 +225,7 @@ export default function Home() {
                 width: '100%',
                 height: 48,
                 background: 'var(--surface)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--text)',
                 fontSize: 16,

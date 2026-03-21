@@ -8,6 +8,17 @@
   --success: #4ECDC4;
   --danger: #EF4444;
 
+  /* Semantic colors */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --shadow: rgba(0, 0, 0, 0.4);
+  --shadow-soft: rgba(0, 0, 0, 0.2);
+  --overlay: rgba(0, 0, 0, 0.85);
+  --card-glow-alpha: 40;
+  --cat-bg-alpha: 15;
+  --cat-border-alpha: 25;
+  --swipe-discard-bg: rgba(255, 255, 255, 0.1);
+
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
@@ -27,6 +38,23 @@
   --cat-night: #A855F7;
   --cat-creative: #EC4899;
   --cat-random: #EF4444;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #F5F5F0;
+    --surface: #FFFFFF;
+    --accent: #D4A017;
+    --text: #1A1A2E;
+    --text-sub: #6B6B80;
+
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.12);
+    --shadow: rgba(0, 0, 0, 0.08);
+    --shadow-soft: rgba(0, 0, 0, 0.04);
+    --overlay: rgba(0, 0, 0, 0.5);
+    --swipe-discard-bg: rgba(0, 0, 0, 0.06);
+  }
 }
 
 * {

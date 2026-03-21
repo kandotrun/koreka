@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
@@ -6,6 +6,19 @@ import { useRoomContext } from '../contexts/RoomContext';
 import { sound } from '../lib/sound';
 
 const avatarColors = ['#FF6B35', '#4ECDC4', '#FFE66D', '#A855F7', '#EC4899', '#EF4444'];
+
+function useIsLight() {
+  const [isLight, setIsLight] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const handler = (e: MediaQueryListEvent) => setIsLight(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isLight;
+}
 
 export default function Lobby() {
   const { code } = useParams<{ code: string }>();
@@ -35,6 +48,7 @@ export default function Lobby() {
     room.ready();
   };
 
+  const isLight = useIsLight();
   const isHost = room.playerId === room.hostId;
   const allReady = room.players.length >= 2 && room.players.every(p => p.id === room.hostId || p.ready);
   const roomUrl = typeof window !== 'undefined' ? window.location.href : '';
@@ -72,8 +86,8 @@ export default function Lobby() {
         <QRCodeSVG
           value={roomUrl}
           size={80}
-          bgColor="#FFFFFF"
-          fgColor="#0A0A0F"
+          bgColor={isLight ? '#F5F5F0' : '#FFFFFF'}
+          fgColor={isLight ? '#1A1A2E' : '#0A0A0F'}
           level="M"
         />
       </button>
@@ -93,7 +107,7 @@ export default function Lobby() {
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(0, 0, 0, 0.85)',
+              background: 'var(--overlay)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -117,8 +131,8 @@ export default function Lobby() {
               <QRCodeSVG
                 value={roomUrl}
                 size={240}
-                bgColor="#FFFFFF"
-                fgColor="#0A0A0F"
+                bgColor={isLight ? '#F5F5F0' : '#FFFFFF'}
+                fgColor={isLight ? '#1A1A2E' : '#0A0A0F'}
                 level="M"
               />
             </motion.div>
@@ -138,7 +152,7 @@ export default function Lobby() {
         width: '100%',
         maxWidth: 320,
         height: 1,
-        background: 'rgba(255,255,255,0.08)',
+        background: 'var(--border)',
         margin: 'var(--space-lg) 0',
       }} />
 
@@ -161,7 +175,7 @@ export default function Lobby() {
                 borderRadius: 'var(--radius-md)',
                 border: player.ready
                   ? '1px solid var(--success)'
-                  : '1px solid rgba(255,255,255,0.08)',
+                  : '1px solid var(--border)',
               }}
             >
               {/* アバター */}

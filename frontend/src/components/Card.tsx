@@ -31,10 +31,10 @@ export default function Card({ card, style, onClick, selected }: CardProps) {
         background: `${cat.gradient.replace('100%)', '10%)')}, var(--surface)`,
         border: selected
           ? `2px solid ${cat.color}`
-          : '1px solid rgba(255,255,255,0.08)',
+          : '1px solid var(--border)',
         boxShadow: selected
           ? `0 0 24px ${cat.color}40`
-          : '0 8px 32px rgba(0,0,0,0.4)',
+          : '0 8px 32px var(--shadow)',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
