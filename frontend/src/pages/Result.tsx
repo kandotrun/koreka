@@ -180,7 +180,7 @@ export default function Result() {
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2 }}
         onClick={async () => {
-          const shareText = t('result.share_text', card.text);
+          const shareText = t('result.share_text', card.text, voteCount, totalPlayers);
           const shareUrl = 'https://koreka.ninomiya.run';
           if (navigator.share) {
             try {

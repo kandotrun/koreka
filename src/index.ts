@@ -92,6 +92,53 @@ app.get('/api/cards/count', async (c) => {
   return c.json({ total: results?.[0]?.total || 0 });
 });
 
+// --- Custom Decks ---
+
+app.post('/api/decks', async (c) => {
+  const body = await c.req.json<{ name: string; cards: string[] }>();
+  if (!body.name || typeof body.name !== 'string' || !Array.isArray(body.cards) || body.cards.length === 0) {
+    return c.json({ error: 'name and cards required' }, 400);
+  }
+  const cards = body.cards.slice(0, 50).map(t => String(t).trim()).filter(Boolean);
+  if (cards.length === 0) {
+    return c.json({ error: 'at least one card required' }, 400);
+  }
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    "INSERT INTO decks (id, name, cards, created_at) VALUES (?, ?, ?, datetime('now'))"
+  ).bind(id, body.name.trim().slice(0, 100), JSON.stringify(cards)).run();
+  return c.json({ id, name: body.name.trim().slice(0, 100), cardCount: cards.length }, 201);
+});
+
+app.get('/api/decks', async (c) => {
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, name, cards, created_at FROM decks ORDER BY created_at DESC'
+  ).all<{ id: string; name: string; cards: string; created_at: string }>();
+  const decks = (results || []).map(r => ({
+    id: r.id,
+    name: r.name,
+    cardCount: (JSON.parse(r.cards) as string[]).length,
+    createdAt: r.created_at,
+  }));
+  return c.json({ decks });
+});
+
+app.get('/api/decks/:id', async (c) => {
+  const id = c.req.param('id');
+  const deck = await c.env.DB.prepare(
+    'SELECT id, name, cards, created_at FROM decks WHERE id = ?'
+  ).bind(id).first<{ id: string; name: string; cards: string; created_at: string }>();
+  if (!deck) {
+    return c.json({ error: 'deck_not_found' }, 404);
+  }
+  return c.json({
+    id: deck.id,
+    name: deck.name,
+    cards: JSON.parse(deck.cards) as string[],
+    createdAt: deck.created_at,
+  });
+});
+
 // --- Feature 1: AI On-Demand Card Generation ---
 
 // Simple in-memory rate limiter (max 3 calls per minute)

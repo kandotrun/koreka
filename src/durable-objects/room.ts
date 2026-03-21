@@ -160,6 +160,10 @@ export class RoomDurableObject implements DurableObject {
         this.room.cardsPerPlayer = body.cardsPerPlayer;
       }
       await this.persist();
+      // Set TTL alarm for auto-cleanup after 2 hours
+      const ttlAt = Date.now() + 2 * 60 * 60 * 1000;
+      await this.state.storage.put('ttlAt', ttlAt);
+      await this.state.storage.setAlarm(ttlAt);
       return new Response(JSON.stringify({ ok: true }));
     }
 
@@ -570,6 +574,18 @@ export class RoomDurableObject implements DurableObject {
 
   async alarm() {
     await this.restore();
+
+    // TTL auto-cleanup: close all connections and delete storage
+    const ttlAt = await this.state.storage.get<number>('ttlAt');
+    if (ttlAt && Date.now() >= ttlAt) {
+      for (const ws of this.state.getWebSockets()) {
+        try { ws.close(1000, 'room_expired'); } catch {}
+      }
+      await this.state.storage.deleteAll();
+      return;
+    }
+
+    // Player disconnect cleanup (waiting phase only)
     if (this.room.phase !== 'waiting') return;
 
     const toRemove: string[] = [];
@@ -593,6 +609,11 @@ export class RoomDurableObject implements DurableObject {
       }
       await this.persist();
       this.broadcastPlayers();
+    }
+
+    // Re-set TTL alarm after player cleanup
+    if (ttlAt && ttlAt > Date.now()) {
+      await this.state.storage.setAlarm(ttlAt);
     }
   }
 

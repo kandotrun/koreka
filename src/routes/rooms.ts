@@ -17,36 +17,49 @@ rooms.post('/', async (c) => {
   }
   const code = generateCode();
 
-  // Fetch cards from D1
-  const validCategories = ['adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy', 'trending', 'seasonal'];
-  const categories = body.settings?.categories?.filter(c => validCategories.includes(c));
-  let query = "SELECT id, text, category, generated FROM cards WHERE (expires_at IS NULL OR expires_at >= date('now'))";
-  const params: string[] = [];
-
-  if (categories && categories.length > 0) {
-    const placeholders = categories.map(() => '?').join(', ');
-    query += ` AND category IN (${placeholders})`;
-    params.push(...categories);
-  }
-
-  query += ' ORDER BY RANDOM() LIMIT ?';
   const cardsPerPlayer = body.settings?.cardsPerPlayer || 5;
-  // We'll get more cards than needed so the game has a good pool
-  params.push(String(cardsPerPlayer * 8));
+  let cards: Card[];
 
-  const { results } = await c.env.DB.prepare(query).bind(...params).all<{
-    id: string;
-    text: string;
-    category: string;
-    generated: number;
-  }>();
+  // Use custom cards if provided, otherwise fetch from D1
+  const customCards = body.settings?.customCards;
+  if (customCards && Array.isArray(customCards) && customCards.length > 0) {
+    cards = customCards.slice(0, 50).map((text, i) => ({
+      id: `custom-${crypto.randomUUID().slice(0, 8)}`,
+      text: String(text).trim().slice(0, 100),
+      category: 'random' as Card['category'],
+      generated: false,
+    })).filter(c => c.text.length > 0);
+  } else {
+    // Fetch cards from D1
+    const validCategories = ['adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy', 'trending', 'seasonal'];
+    const categories = body.settings?.categories?.filter(c => validCategories.includes(c));
+    let query = "SELECT id, text, category, generated FROM cards WHERE (expires_at IS NULL OR expires_at >= date('now'))";
+    const params: string[] = [];
 
-  const cards: Card[] = (results || []).map(r => ({
-    id: r.id,
-    text: r.text,
-    category: r.category as Card['category'],
-    generated: r.generated === 1,
-  }));
+    if (categories && categories.length > 0) {
+      const placeholders = categories.map(() => '?').join(', ');
+      query += ` AND category IN (${placeholders})`;
+      params.push(...categories);
+    }
+
+    query += ' ORDER BY RANDOM() LIMIT ?';
+    // We'll get more cards than needed so the game has a good pool
+    params.push(String(cardsPerPlayer * 8));
+
+    const { results } = await c.env.DB.prepare(query).bind(...params).all<{
+      id: string;
+      text: string;
+      category: string;
+      generated: number;
+    }>();
+
+    cards = (results || []).map(r => ({
+      id: r.id,
+      text: r.text,
+      category: r.category as Card['category'],
+      generated: r.generated === 1,
+    }));
+  }
 
   // Create Durable Object
   const roomId = c.env.ROOM.idFromName(code);

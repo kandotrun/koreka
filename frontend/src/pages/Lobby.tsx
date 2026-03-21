@@ -17,6 +17,7 @@ export default function Lobby() {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [prevPlayerCount, setPrevPlayerCount] = useState(0);
   const [joinName, setJoinName] = useState('');
+  const [soundOn, setSoundOn] = useState(sound.enabled);
   const needsName = !room.playerId && !sessionStorage.getItem('playerName');
 
   // ゲーム開始でGame画面に遷移
@@ -275,6 +276,28 @@ export default function Lobby() {
             </motion.div>
           ))}
         </AnimatePresence>
+      </div>
+
+      {/* サウンド切り替え */}
+      <div style={{ width: '100%', maxWidth: 320, display: 'flex', justifyContent: 'center', marginTop: 'var(--space-md)' }}>
+        <button
+          onClick={() => { sound.toggle(); setSoundOn(sound.enabled); }}
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-full)',
+            width: 40,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            cursor: 'pointer',
+          }}
+          title={soundOn ? 'Sound ON' : 'Sound OFF'}
+        >
+          {soundOn ? '🔊' : '🔇'}
+        </button>
       </div>
 
       {/* アクション */}

@@ -69,6 +69,7 @@ export interface CreateRoomRequest {
   settings?: {
     cardsPerPlayer?: number;
     categories?: CardCategory[];
+    customCards?: string[];
   };
 }
 
