@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useRoomContext } from '../contexts/RoomContext';
 import { sound } from '../lib/sound';
 import { useTheme } from '../hooks/useTheme';
+import { useI18n } from '../contexts/I18nContext';
 
 const avatarColors = ['#FF6B35', '#4ECDC4', '#FFE66D', '#A855F7', '#EC4899', '#EF4444'];
 
@@ -12,6 +13,7 @@ export default function Lobby() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const room = useRoomContext();
+  const { t } = useI18n();
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [prevPlayerCount, setPrevPlayerCount] = useState(0);
   const [joinName, setJoinName] = useState('');
@@ -47,10 +49,10 @@ export default function Lobby() {
   // エラー画面（満員 or ゲーム中）
   if (room.error) {
     const errorMessages: Record<string, { title: string; desc: string }> = {
-      room_full: { title: 'ルームが満員です', desc: 'このルームは最大人数（8人）に達しています。' },
-      game_in_progress: { title: 'ゲーム進行中', desc: 'このルームではすでにゲームが始まっています。' },
+      room_full: { title: t('lobby.room_full_title'), desc: t('lobby.room_full_desc') },
+      game_in_progress: { title: t('lobby.game_in_progress_title'), desc: t('lobby.game_in_progress_desc') },
     };
-    const err = errorMessages[room.error] || { title: 'エラー', desc: room.error };
+    const err = errorMessages[room.error] || { title: t('common.error'), desc: room.error };
     return (
       <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-lg)', textAlign: 'center' }}>
         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
@@ -61,7 +63,7 @@ export default function Lobby() {
           </p>
         </motion.div>
         <button className="btn-primary" onClick={() => navigate('/')} style={{ maxWidth: 240 }}>
-          トップに戻る
+          {t('lobby.go_home')}
         </button>
       </div>
     );
@@ -70,14 +72,14 @@ export default function Lobby() {
   // QRから来た参加者用の名前入力画面
   if (needsName) {
     const handleJoin = () => {
-      const name = joinName.trim() || 'ゲスト';
+      const name = joinName.trim() || t('common.guest');
       sessionStorage.setItem('playerName', name);
       room.connect(name);
     };
     return (
       <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-xl)' }}>
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} style={{ textAlign: 'center' }}>
-          <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>ルーム {code} に参加</p>
+          <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>{t('lobby.join_room', code || '')}</p>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -86,13 +88,13 @@ export default function Lobby() {
           style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}
         >
           <div>
-            <label style={{ fontSize: 12, color: 'var(--text-sub)', marginBottom: 4, display: 'block' }}>なまえ</label>
+            <label style={{ fontSize: 12, color: 'var(--text-sub)', marginBottom: 4, display: 'block' }}>{t('home.name_label')}</label>
             <input
               type="text"
               value={joinName}
               onChange={e => setJoinName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleJoin()}
-              placeholder="ニックネーム"
+              placeholder={t('home.name_placeholder')}
               maxLength={10}
               autoFocus
               style={{
@@ -108,7 +110,7 @@ export default function Lobby() {
             />
           </div>
           <button className="btn-primary" onClick={handleJoin}>
-            参加する 🎴
+            {t('lobby.join_btn')}
           </button>
         </motion.div>
       </div>
@@ -117,7 +119,7 @@ export default function Lobby() {
 
   return (
     <div className="page" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
-      <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>ルーム</p>
+      <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>{t('lobby.room')}</p>
 
       {/* ルームコード */}
       <div style={{
@@ -155,7 +157,7 @@ export default function Lobby() {
       </button>
 
       <p style={{ color: 'var(--text-sub)', fontSize: 12, marginTop: 'var(--space-sm)' }}>
-        QRコードをタップして拡大 · コードを友達にシェアしよう
+        {t('lobby.qr_hint')}
       </p>
 
       {/* QRモーダル */}
@@ -203,7 +205,7 @@ export default function Lobby() {
               fontSize: 14,
               marginTop: 'var(--space-lg)',
             }}>
-              タップして閉じる
+              {t('lobby.tap_close')}
             </p>
           </motion.div>
         )}
@@ -262,13 +264,13 @@ export default function Lobby() {
               <div style={{ flex: 1 }}>
                 <span style={{ fontWeight: 700 }}>{player.name}</span>
                 {player.id === room.hostId && (
-                  <span style={{ fontSize: 12, color: 'var(--text-sub)', marginLeft: 8 }}>ホスト</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-sub)', marginLeft: 8 }}>{t('common.host')}</span>
                 )}
               </div>
 
               {/* ステータス */}
               <span style={{ fontSize: 14, color: player.ready ? 'var(--success)' : 'var(--text-sub)' }}>
-                {player.ready ? '準備OK' : '待機中'}
+                {player.ready ? t('lobby.ready') : t('lobby.waiting')}
               </span>
             </motion.div>
           ))}
@@ -287,7 +289,7 @@ export default function Lobby() {
       }}>
         {!isHost && (
           <button type="button" className="btn-primary" onClick={handleReady}>
-            {room.players.find(p => p.id === room.playerId)?.ready ? '待機に戻す' : '準備OK ✓'}
+            {room.players.find(p => p.id === room.playerId)?.ready ? t('lobby.unready') : t('lobby.ready_btn')}
           </button>
         )}
         {isHost && (
@@ -297,7 +299,7 @@ export default function Lobby() {
             disabled={!allReady}
             onClick={() => room.start()}
           >
-            {allReady ? 'ゲーム開始 ▶' : '全員の準備を待っています...'}
+            {allReady ? t('lobby.start_game') : t('lobby.waiting_all')}
           </button>
         )}
       </div>

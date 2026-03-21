@@ -250,10 +250,32 @@ app.post('/api/rooms/:code/result', async (c) => {
   return c.json({ ok: true });
 });
 
-// --- Feature 3: Admin Stats ---
+// --- Feature 3: Admin Auth + Stats ---
 
-// TODO: Add authentication (e.g. Bearer token or basic auth) before production use
+// In-memory token store (token -> expiry timestamp)
+const adminTokens = new Map<string, number>();
+const TOKEN_TTL = 24 * 60 * 60 * 1000; // 24h
+
+app.post('/api/admin/login', async (c) => {
+  const body = await c.req.json<{ password: string }>();
+  if (!body.password || body.password !== c.env.ADMIN_PASSWORD) {
+    return c.json({ error: 'unauthorized' }, 401);
+  }
+  const token = crypto.randomUUID();
+  adminTokens.set(token, Date.now() + TOKEN_TTL);
+  return c.json({ token });
+});
+
 app.get('/api/admin/stats', async (c) => {
+  const auth = c.req.header('Authorization');
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return c.json({ error: 'unauthorized' }, 401);
+  const expiry = adminTokens.get(token);
+  if (!expiry || Date.now() > expiry) {
+    if (expiry) adminTokens.delete(token);
+    return c.json({ error: 'unauthorized' }, 401);
+  }
+
   const [cardsRes, roomsRes, memoriesRes, topCardsRes] = await Promise.all([
     c.env.DB.prepare(`SELECT COUNT(*) as total FROM cards WHERE ${ACTIVE_FILTER}`).first<{ total: number }>(),
     c.env.DB.prepare('SELECT COUNT(*) as total FROM rooms').first<{ total: number }>(),

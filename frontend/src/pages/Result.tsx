@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Card from '../components/Card';
 import type { Card as CardType, PlayerInfo } from '../../../src/types';
 import { sound } from '../lib/sound';
+import { useI18n } from '../contexts/I18nContext';
 
 const bounceSpring = {
   type: 'spring' as const,
@@ -47,6 +48,7 @@ export default function Result() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useI18n();
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [memoryComment, setMemoryComment] = useState('');
   const [memorySaving, setMemorySaving] = useState(false);
@@ -76,11 +78,11 @@ export default function Result() {
       });
       if (res.ok) {
         setShowMemoryModal(false);
-        alert('思い出を保存しました！');
+        alert(t('result.saved'));
         navigate('/');
       }
     } catch {
-      alert('保存に失敗しました');
+      alert(t('result.save_failed'));
     } finally {
       setMemorySaving(false);
     }
@@ -139,7 +141,7 @@ export default function Result() {
           color: 'var(--text-sub)',
         }}
       >
-        {voteCount}/{totalPlayers}人が選択 🔥
+        {t('result.vote_count', voteCount, totalPlayers)}
       </motion.p>
 
       {/* ChatGPT相談ボタン */}
@@ -147,7 +149,7 @@ export default function Result() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.0 }}
-        href={`https://chatgpt.com/?q=${encodeURIComponent(`「${card.text}」をやることになりました！具体的なプラン・準備・おすすめを教えてください。`)}`}
+        href={`https://chatgpt.com/?q=${encodeURIComponent(t('result.chatgpt_prompt', card.text))}`}
         target="_blank"
         rel="noopener noreferrer"
         style={{
@@ -169,7 +171,7 @@ export default function Result() {
           cursor: 'pointer',
         }}
       >
-        🤖 ChatGPTに相談する
+        {t('result.ask_chatgpt')}
       </motion.a>
 
       {/* Share button */}
@@ -178,7 +180,7 @@ export default function Result() {
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2 }}
         onClick={async () => {
-          const shareText = `「${card.text}」に決まった！🎴\n\nこれか！ - みんなの「次どうする？」が決まるゲーム`;
+          const shareText = t('result.share_text', card.text);
           const shareUrl = 'https://koreka.ninomiya.run';
           if (navigator.share) {
             try {
@@ -188,7 +190,7 @@ export default function Result() {
             }
           } else {
             await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-            alert('コピーしました！');
+            alert(t('result.copied'));
           }
         }}
         style={{
@@ -209,7 +211,7 @@ export default function Result() {
           cursor: 'pointer',
         }}
       >
-        📤 結果をシェア
+        {t('result.share')}
       </motion.button>
 
       {/* Actions */}
@@ -230,14 +232,14 @@ export default function Result() {
           style={{ flex: 1 }}
           onClick={() => navigate('/')}
         >
-          もう一回
+          {t('result.play_again')}
         </button>
         <button
           className="btn-primary"
           style={{ flex: 1 }}
           onClick={() => setShowMemoryModal(true)}
         >
-          思い出記録
+          {t('result.save_memory')}
         </button>
       </motion.div>
 
@@ -274,15 +276,15 @@ export default function Result() {
               }}
             >
               <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 'var(--space-md)' }}>
-                思い出を記録
+                {t('result.memory_title')}
               </h2>
               <p style={{ fontSize: 14, color: 'var(--text-sub)', marginBottom: 'var(--space-md)' }}>
-                「{card.text}」の思い出コメントを残そう
+                {t('result.memory_desc', card.text)}
               </p>
               <textarea
                 value={memoryComment}
                 onChange={(e) => setMemoryComment(e.target.value)}
-                placeholder="楽しかった！また来よう..."
+                placeholder={t('result.memory_placeholder')}
                 maxLength={500}
                 style={{
                   width: '100%',
@@ -303,7 +305,7 @@ export default function Result() {
                   style={{ flex: 1 }}
                   onClick={() => setShowMemoryModal(false)}
                 >
-                  キャンセル
+                  {t('common.cancel')}
                 </button>
                 <button
                   className="btn-primary"
@@ -311,7 +313,7 @@ export default function Result() {
                   disabled={!memoryComment.trim() || memorySaving}
                   onClick={handleSaveMemory}
                 >
-                  {memorySaving ? '保存中...' : '保存する'}
+                  {memorySaving ? t('result.saving') : t('result.save')}
                 </button>
               </div>
             </motion.div>

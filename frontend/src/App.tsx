@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
+import { I18nProvider } from './contexts/I18nContext';
 import { RoomProvider } from './contexts/RoomContext';
 import Home from './pages/Home';
 import Lobby from './pages/Lobby';
@@ -21,12 +22,14 @@ function RoomRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/:code/*" element={<RoomRoutes />} />
-      </Routes>
-    </BrowserRouter>
+    <I18nProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/:code/*" element={<RoomRoutes />} />
+        </Routes>
+      </BrowserRouter>
+    </I18nProvider>
   );
 }

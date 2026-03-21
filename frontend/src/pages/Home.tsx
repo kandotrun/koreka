@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTheme } from '../hooks/useTheme';
+import { useI18n } from '../contexts/I18nContext';
+import { LANGS } from '../lib/i18n';
 
 const categoryConfig: Record<string, { icon: string; color: string }> = {
   adventure: { icon: '🏔️', color: '#FF6B35' },
@@ -31,6 +33,7 @@ const themeIcon: Record<string, string> = {
 export default function Home() {
   const navigate = useNavigate();
   const { preference, toggle } = useTheme();
+  const { t, lang, setLang } = useI18n();
   const [mode, setMode] = useState<'home' | 'join' | 'create'>('home');
   const [sampleCards, setSampleCards] = useState<SampleCard[]>([]);
 
@@ -41,17 +44,6 @@ export default function Home() {
       .catch(() => {});
   }, []);
   const allCategories = Object.keys(categoryConfig) as Array<keyof typeof categoryConfig>;
-  const categoryLabels: Record<string, string> = {
-    adventure: '冒険',
-    chill: 'まったり',
-    food: 'グルメ',
-    night: '夜遊び',
-    creative: 'クリエイティブ',
-    random: 'カオス',
-    spicy: 'スパイシー',
-    trending: '時事ネタ',
-    seasonal: '季節',
-  };
 
   const [name, setName] = useState('');
   const [code, setCode] = useState(['', '', '', '']);
@@ -131,31 +123,62 @@ export default function Home() {
     }
   };
 
+  const cycleLang = () => {
+    const idx = LANGS.findIndex(l => l.code === lang);
+    const next = LANGS[(idx + 1) % LANGS.length];
+    setLang(next.code);
+  };
+
+  const currentFlag = LANGS.find(l => l.code === lang)?.flag ?? '🇯🇵';
+
   return (
     <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-xl)', position: 'relative' }}>
-      {/* テーマ切り替え */}
-      <button
-        onClick={toggle}
-        style={{
-          position: 'absolute',
-          top: 16,
-          right: 16,
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-full)',
-          width: 40,
-          height: 40,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 18,
-          cursor: 'pointer',
-          zIndex: 10,
-        }}
-        title={`テーマ: ${preference}`}
-      >
-        {themeIcon[preference]}
-      </button>
+      {/* テーマ切り替え + 言語切り替え */}
+      <div style={{
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        display: 'flex',
+        gap: 8,
+        zIndex: 10,
+      }}>
+        <button
+          onClick={cycleLang}
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-full)',
+            width: 40,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            cursor: 'pointer',
+          }}
+          title={LANGS.find(l => l.code === lang)?.label}
+        >
+          {currentFlag}
+        </button>
+        <button
+          onClick={toggle}
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-full)',
+            width: 40,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            cursor: 'pointer',
+          }}
+          title={`${t('theme.title')}: ${preference}`}
+        >
+          {themeIcon[preference]}
+        </button>
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -189,7 +212,7 @@ export default function Home() {
           letterSpacing: '0.15em',
           textTransform: 'uppercase',
         }}>
-          Koreka — みんなの「次どうする？」が決まるゲーム
+          {t('home.subtitle')}
         </p>
       </motion.div>
 
@@ -208,16 +231,16 @@ export default function Home() {
             border: '1px solid var(--border)',
           }}>
             <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--text)' }}>
-              カードをスワイプして<br />
-              <strong style={{ color: 'var(--primary)' }}>やりたいこと</strong>を残すだけ。<br />
-              最後に残った1枚がみんなの答え。
+              {t('home.desc1')}<br />
+              <strong style={{ color: 'var(--primary)' }}>{t('home.desc_highlight')}</strong>{t('home.desc2')}<br />
+              {t('home.desc3')}
             </p>
           </div>
 
           {/* お題サンプル（2行交互スクロール） */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
             <p style={{ fontSize: 11, color: 'var(--text-sub)', textAlign: 'center', letterSpacing: '0.1em' }}>
-              — お題の例 —
+              {t('home.sample_title')}
             </p>
             {(() => {
               const fallback: SampleCard[] = [
@@ -283,9 +306,9 @@ export default function Home() {
             padding: '0 var(--space-sm)',
           }}>
             {[
-              { step: '1', label: 'ルーム作成' },
-              { step: '2', label: 'カード選別' },
-              { step: '3', label: 'これか！' },
+              { step: '1', label: t('home.step1') },
+              { step: '2', label: t('home.step2') },
+              { step: '3', label: t('home.step3') },
             ].map((s, i) => (
               <div key={i} style={{ textAlign: 'center' }}>
                 <div style={{
@@ -311,10 +334,10 @@ export default function Home() {
           {/* ボタン */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
             <button className="btn-primary" onClick={() => setMode('create')}>
-              ルームを作る 🎴
+              {t('home.create_room')}
             </button>
             <button className="btn-secondary" onClick={() => setMode('join')}>
-              コードで参加
+              {t('home.join_code')}
             </button>
           </div>
         </motion.div>
@@ -329,13 +352,13 @@ export default function Home() {
           {/* Name input */}
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-sub)', marginBottom: 4, display: 'block' }}>
-              なまえ
+              {t('home.name_label')}
             </label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="ニックネーム"
+              placeholder={t('home.name_placeholder')}
               maxLength={10}
               autoFocus
               style={{
@@ -356,7 +379,7 @@ export default function Home() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <label style={{ fontSize: 12, color: 'var(--text-sub)' }}>
-                  カテゴリ
+                  {t('home.category_label')}
                 </label>
                 <button
                   onClick={toggleAll}
@@ -369,7 +392,7 @@ export default function Home() {
                     padding: 0,
                   }}
                 >
-                  {selectedCategories.size === allCategories.length ? 'すべて解除' : 'すべて選択'}
+                  {selectedCategories.size === allCategories.length ? t('home.deselect_all') : t('home.select_all')}
                 </button>
               </div>
               <div style={{
@@ -401,14 +424,14 @@ export default function Home() {
                       }}
                     >
                       <span style={{ fontSize: 14 }}>{cfg.icon}</span>
-                      {categoryLabels[cat]}
+                      {t(`cat.${cat}`)}
                     </button>
                   );
                 })}
               </div>
               {selectedCategories.size === 0 && (
                 <p style={{ fontSize: 11, color: 'var(--text-sub)', marginTop: 6 }}>
-                  未選択の場合はすべてのカテゴリから出題されます
+                  {t('home.no_category_hint')}
                 </p>
               )}
             </div>
@@ -418,7 +441,7 @@ export default function Home() {
           {mode === 'join' && (
             <div>
               <label style={{ fontSize: 12, color: 'var(--text-sub)', marginBottom: 4, display: 'block' }}>
-                ルームコード
+                {t('home.room_code_label')}
               </label>
               <div className="code-input">
                 {code.map((digit, i) => (
@@ -442,11 +465,11 @@ export default function Home() {
             disabled={!name.trim() || (mode === 'join' && code.join('').length !== 4) || loading}
             onClick={mode === 'create' ? handleCreateRoom : handleJoinRoom}
           >
-            {loading ? '...' : mode === 'create' ? 'ルームを作成' : '参加する'}
+            {loading ? '...' : mode === 'create' ? t('home.create_submit') : t('home.join_submit')}
           </button>
 
           <button className="btn-ghost" onClick={() => setMode('home')} style={{ textAlign: 'center' }}>
-            戻る
+            {t('common.back')}
           </button>
         </motion.div>
       )}
