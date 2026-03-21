@@ -538,6 +538,179 @@ describe('RoomDurableObject', () => {
     });
   });
 
+  describe('全カードキープ防止', () => {
+    it('全カード選択するとinvalid_selectionエラーになる', async () => {
+      await initRoom(room, '1234', makeCards(40), 5);
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+      await sendMsg(room, ws1, { type: 'join', name: 'Alice' });
+      await sendMsg(room, ws2, { type: 'join', name: 'Bob' });
+      await sendMsg(room, ws2, { type: 'ready' });
+
+      // ゲーム開始
+      await sendMsg(room, ws1, { type: 'start' });
+
+      // Aliceのカードを取得
+      const aliceDeal = getSent(ws1).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+      expect(aliceDeal).toBeDefined();
+      const allCardIds = aliceDeal.cards.map(c => c.id);
+
+      ws1.clearSent();
+
+      // 全カードをキープしようとする → エラー
+      await sendMsg(room, ws1, { type: 'select', cardIds: allCardIds });
+      const error = getLastSent(ws1);
+      expect(error.type).toBe('error');
+      if (error.type === 'error') {
+        expect(error.message).toBe('invalid_selection');
+      }
+    });
+
+    it('手札1枚の時は全キープできる', async () => {
+      // 1枚だけの手札の場合は全キープOK（捨てるものがない）
+      await initRoom(room, '1234', makeCards(2), 1);
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+      await sendMsg(room, ws1, { type: 'join', name: 'Alice' });
+      await sendMsg(room, ws2, { type: 'join', name: 'Bob' });
+      await sendMsg(room, ws2, { type: 'ready' });
+      await sendMsg(room, ws1, { type: 'start' });
+
+      const aliceDeal = getSent(ws1).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+      expect(aliceDeal.cards).toHaveLength(1);
+
+      ws1.clearSent();
+
+      // 1枚キープ → エラーにならない
+      await sendMsg(room, ws1, { type: 'select', cardIds: [aliceDeal.cards[0].id] });
+      const msg = getLastSent(ws1);
+      // waiting か final_vote になるはず（errorではない）
+      expect(msg.type).not.toBe('error');
+    });
+  });
+
+  describe('投票エラーハンドリング', () => {
+    async function setupToVoting(room: InstanceType<typeof RoomDurableObject>) {
+      await initRoom(room, '1234', makeCards(40), 5);
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+      await sendMsg(room, ws1, { type: 'join', name: 'Alice' });
+      await sendMsg(room, ws2, { type: 'join', name: 'Bob' });
+      await sendMsg(room, ws2, { type: 'ready' });
+      await sendMsg(room, ws1, { type: 'start' });
+
+      // 各プレイヤーが1枚だけキープ → final_vote
+      const deal1 = getSent(ws1).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+      const deal2 = getSent(ws2).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+      await sendMsg(room, ws1, { type: 'select', cardIds: [deal1.cards[0].id] });
+      await sendMsg(room, ws2, { type: 'select', cardIds: [deal2.cards[0].id] });
+
+      return { ws1, ws2 };
+    }
+
+    it('存在しないカードに投票するとinvalid_selectionエラー', async () => {
+      const { ws1 } = await setupToVoting(room);
+
+      // final_voteが来てることを確認
+      const finalVote = getSent(ws1).find(m => m.type === 'final_vote');
+      expect(finalVote).toBeDefined();
+
+      ws1.clearSent();
+      await sendMsg(room, ws1, { type: 'vote', cardId: 'nonexistent-card' });
+      const error = getLastSent(ws1);
+      expect(error.type).toBe('error');
+      if (error.type === 'error') {
+        expect(error.message).toBe('invalid_selection');
+      }
+    });
+
+    it('二重投票するとalready_votedエラー', async () => {
+      const { ws1 } = await setupToVoting(room);
+      const finalVote = getSent(ws1).find(m => m.type === 'final_vote') as Extract<ServerMessage, { type: 'final_vote' }>;
+      const validCardId = finalVote.cards[0].id;
+
+      await sendMsg(room, ws1, { type: 'vote', cardId: validCardId });
+      ws1.clearSent();
+
+      // 同じカードにもう1回投票
+      await sendMsg(room, ws1, { type: 'vote', cardId: validCardId });
+      const error = getLastSent(ws1);
+      expect(error.type).toBe('error');
+      if (error.type === 'error') {
+        expect(error.message).toBe('already_voted');
+      }
+    });
+
+    it('全員投票すると結果が返る', async () => {
+      const { ws1, ws2 } = await setupToVoting(room);
+      const finalVote = getSent(ws1).find(m => m.type === 'final_vote') as Extract<ServerMessage, { type: 'final_vote' }>;
+      const validCardId = finalVote.cards[0].id;
+
+      await sendMsg(room, ws1, { type: 'vote', cardId: validCardId });
+      ws1.clearSent();
+      ws2.clearSent();
+      await sendMsg(room, ws2, { type: 'vote', cardId: validCardId });
+
+      const result1 = getLastSent(ws1);
+      const result2 = getLastSent(ws2);
+      expect(result1.type).toBe('result');
+      expect(result2.type).toBe('result');
+    });
+  });
+
+  describe('再接続', () => {
+    it('同じplayerIdで再接続するとホスト権限が維持される', async () => {
+      await initRoom(room, '1234', makeCards(10));
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+      await sendMsg(room, ws1, { type: 'join', name: 'Alice' });
+      const welcome1 = getSent(ws1).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>;
+      const aliceId = welcome1.playerId;
+
+      await sendMsg(room, ws2, { type: 'join', name: 'Bob' });
+
+      // Alice切断
+      await room.webSocketClose(ws1 as unknown as WebSocket);
+
+      // Alice再接続（同じID）
+      const ws3 = new MockWebSocket();
+      await sendMsg(room, ws3, { type: 'join', name: 'Alice', playerId: aliceId });
+      const welcome3 = getSent(ws3).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>;
+
+      expect(welcome3.playerId).toBe(aliceId);
+      expect(welcome3.roomState.hostId).toBe(aliceId);
+    });
+
+    it('ゲーム中の再接続で手札が再送される', async () => {
+      await initRoom(room, '1234', makeCards(40), 5);
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+      await sendMsg(room, ws1, { type: 'join', name: 'Alice' });
+      const welcome1 = getSent(ws1).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>;
+      const aliceId = welcome1.playerId;
+
+      await sendMsg(room, ws2, { type: 'join', name: 'Bob' });
+      await sendMsg(room, ws2, { type: 'ready' });
+      await sendMsg(room, ws1, { type: 'start' });
+
+      // Alice切断
+      await room.webSocketClose(ws1 as unknown as WebSocket);
+
+      // Alice再接続
+      const ws3 = new MockWebSocket();
+      await sendMsg(room, ws3, { type: 'join', name: 'Alice', playerId: aliceId });
+
+      const msgs = getSent(ws3);
+      const welcomeMsg = msgs.find(m => m.type === 'welcome');
+      const dealMsg = msgs.find(m => m.type === 'deal');
+      expect(welcomeMsg).toBeDefined();
+      expect(dealMsg).toBeDefined();
+      if (dealMsg?.type === 'deal') {
+        expect(dealMsg.cards.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
   describe('プレイヤー切断', () => {
     it('プレイヤーが切断してもリストには残る（30秒猶予）', async () => {
       await initRoom(room, '1234', makeCards(10));
