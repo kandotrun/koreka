@@ -274,6 +274,12 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
+    // ルームが未初期化の場合
+    if (!this.room.code) {
+      this.send(ws, { type: 'error', message: 'room_not_found' });
+      return;
+    }
+
     // ゲーム中は新規参加ブロック
     if (this.room.phase !== 'waiting') {
       this.send(ws, { type: 'error', message: 'game_in_progress' });

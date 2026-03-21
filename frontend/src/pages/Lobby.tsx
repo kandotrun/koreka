@@ -6,6 +6,7 @@ import { useRoomContext } from '../contexts/RoomContext';
 import { sound } from '../lib/sound';
 import { useTheme } from '../hooks/useTheme';
 import { useI18n } from '../contexts/I18nContext';
+import NotFound from './NotFound';
 
 const avatarColors = ['#FF6B35', '#4ECDC4', '#FFE66D', '#A855F7', '#EC4899', '#EF4444'];
 
@@ -46,6 +47,11 @@ export default function Lobby() {
   const isHost = room.playerId === room.hostId;
   const allReady = room.players.length >= 2 && room.players.every(p => p.id === room.hostId || p.ready);
   const roomUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+  // ルームが見つからない場合
+  if (room.error === 'room_not_found') {
+    return <NotFound code={code} />;
+  }
 
   // エラー画面（満員 or ゲーム中）
   if (room.error) {
