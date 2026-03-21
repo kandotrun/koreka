@@ -14,6 +14,8 @@ export default function Lobby() {
   const room = useRoomContext();
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [prevPlayerCount, setPrevPlayerCount] = useState(0);
+  const [joinName, setJoinName] = useState('');
+  const needsName = !room.playerId && !sessionStorage.getItem('playerName');
 
   // ゲーム開始でGame画面に遷移
   useEffect(() => {
@@ -41,6 +43,54 @@ export default function Lobby() {
   const isHost = room.playerId === room.hostId;
   const allReady = room.players.length >= 2 && room.players.every(p => p.id === room.hostId || p.ready);
   const roomUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+  // QRから来た参加者用の名前入力画面
+  if (needsName) {
+    const handleJoin = () => {
+      const name = joinName.trim() || 'ゲスト';
+      sessionStorage.setItem('playerName', name);
+      room.connect(name);
+    };
+    return (
+      <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-xl)' }}>
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} style={{ textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>ルーム {code} に参加</p>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}
+        >
+          <div>
+            <label style={{ fontSize: 12, color: 'var(--text-sub)', marginBottom: 4, display: 'block' }}>なまえ</label>
+            <input
+              type="text"
+              value={joinName}
+              onChange={e => setJoinName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleJoin()}
+              placeholder="ニックネーム"
+              maxLength={10}
+              autoFocus
+              style={{
+                width: '100%',
+                height: 48,
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text)',
+                fontSize: 16,
+                padding: '0 16px',
+              }}
+            />
+          </div>
+          <button className="btn-primary" onClick={handleJoin}>
+            参加する 🎴
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="page" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>

@@ -52,6 +52,13 @@ export function useRoom(code: string | undefined) {
     ws.onclose = () => {
       wsRef.current = null;
       setState(s => ({ ...s, connected: false }));
+      // 自動再接続（デプロイ後の断線復帰用）
+      const savedName = window.sessionStorage.getItem('playerName') || 'ゲスト';
+      setTimeout(() => {
+        if (!wsRef.current) {
+          connect(savedName);
+        }
+      }, 2000);
     };
 
     ws.onmessage = (event) => {
@@ -114,8 +121,11 @@ export function useRoom(code: string | undefined) {
 
   useEffect(() => {
     if (!code || wsRef.current) return;
-    const name = window.sessionStorage.getItem('playerName') || 'ゲスト';
-    connect(name);
+    const name = window.sessionStorage.getItem('playerName');
+    if (name) {
+      connect(name);
+    }
+    // 名前未設定の場合はLobbyで入力を促す（自動joinしない）
   }, [code, connect]);
 
   // Ping to keep alive
