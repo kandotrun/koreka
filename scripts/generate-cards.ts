@@ -143,9 +143,11 @@ async function insertCards(cards: Array<{ text: string; category: string }>): Pr
   let inserted = 0;
   for (const card of cards) {
     const id = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const expiry = card.category === 'trending' ? 60 : card.category === 'seasonal' ? 90 : null;
+    const expiresAt = expiry ? new Date(Date.now() + expiry * 86400000).toISOString().slice(0, 10) : null;
     await queryD1(
-      'INSERT INTO cards (id, text, category, generated) VALUES (?, ?, ?, 1)',
-      [id, card.text, card.category]
+      'INSERT INTO cards (id, text, category, generated, expires_at) VALUES (?, ?, ?, 1, ?)',
+      [id, card.text, card.category, expiresAt as string]
     );
     inserted++;
     // Rate limit対策

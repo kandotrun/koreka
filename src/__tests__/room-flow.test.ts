@@ -202,8 +202,8 @@ describe('room creation flow', () => {
       throw new Error('Expected deal messages for both players');
     }
 
-    expect(hostDeal.cards).toHaveLength(20);
-    expect(guestDeal.cards).toHaveLength(20);
+    expect(hostDeal.cards).toHaveLength(5);
+    expect(guestDeal.cards).toHaveLength(5);
     expect(db.inserts).toHaveLength(1);
     expect(db.inserts[0]?.query).toContain('INSERT INTO rooms');
   });

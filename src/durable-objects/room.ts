@@ -60,7 +60,7 @@ export class RoomDurableObject implements DurableObject {
       survivors: [],
       result: null,
       votes: new Map(),
-      cardsPerPlayer: 20,
+      cardsPerPlayer: 5,
     };
   }
 

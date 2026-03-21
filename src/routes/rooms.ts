@@ -20,17 +20,17 @@ rooms.post('/', async (c) => {
   // Fetch cards from D1
   const validCategories = ['adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy', 'trending', 'seasonal'];
   const categories = body.settings?.categories?.filter(c => validCategories.includes(c));
-  let query = 'SELECT id, text, category, generated FROM cards';
+  let query = "SELECT id, text, category, generated FROM cards WHERE (expires_at IS NULL OR expires_at >= date('now'))";
   const params: string[] = [];
 
   if (categories && categories.length > 0) {
     const placeholders = categories.map(() => '?').join(', ');
-    query += ` WHERE category IN (${placeholders})`;
+    query += ` AND category IN (${placeholders})`;
     params.push(...categories);
   }
 
   query += ' ORDER BY RANDOM() LIMIT ?';
-  const cardsPerPlayer = body.settings?.cardsPerPlayer || 20;
+  const cardsPerPlayer = body.settings?.cardsPerPlayer || 5;
   // We'll get more cards than needed so the game has a good pool
   params.push(String(cardsPerPlayer * 8));
 

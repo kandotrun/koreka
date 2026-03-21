@@ -29,10 +29,13 @@ const categoryMeta: Record<string, { name: string; icon: string }> = {
 
 const ALL_CATEGORIES = Object.keys(categoryMeta);
 
+// 有効期限フィルタ（expires_at IS NULL = 無期限, または未来日）
+const ACTIVE_FILTER = "(expires_at IS NULL OR expires_at >= date('now'))";
+
 // Card categories
 app.get('/api/cards/categories', async (c) => {
   const { results } = await c.env.DB.prepare(
-    'SELECT category, COUNT(*) as count FROM cards GROUP BY category'
+    `SELECT category, COUNT(*) as count FROM cards WHERE ${ACTIVE_FILTER} GROUP BY category`
   ).all<{ category: string; count: number }>();
 
   const categories = (results || []).map(r => ({
@@ -58,17 +61,16 @@ app.get('/api/cards/sample', async (c) => {
       return c.json({ cards: [], count: 0 });
     }
     const { results } = await c.env.DB.prepare(
-      'SELECT id, text, category, generated FROM cards WHERE category = ? ORDER BY RANDOM() LIMIT ?'
+      `SELECT id, text, category, generated FROM cards WHERE category = ? AND ${ACTIVE_FILTER} ORDER BY RANDOM() LIMIT ?`
     ).bind(category, limit).all<CardRow>();
     return c.json({ cards: results || [], count: (results || []).length });
   }
 
-  // 全カテゴリから均等取得（1クエリ + UNION ALL）
-  // D1はbatch不可なので個別クエリだが、並列実行で高速化
+  // 全カテゴリから均等取得、並列実行で高速化
   const perCat = Math.max(Math.ceil(limit / ALL_CATEGORIES.length), 2);
   const queries = ALL_CATEGORIES.map(cat =>
     c.env.DB.prepare(
-      'SELECT id, text, category, generated FROM cards WHERE category = ? ORDER BY RANDOM() LIMIT ?'
+      `SELECT id, text, category, generated FROM cards WHERE category = ? AND ${ACTIVE_FILTER} ORDER BY RANDOM() LIMIT ?`
     ).bind(cat, perCat).all<CardRow>()
   );
   const results = await Promise.all(queries);
@@ -85,7 +87,7 @@ app.get('/api/cards/sample', async (c) => {
 
 // お題総数
 app.get('/api/cards/count', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT COUNT(*) as total FROM cards').all<{ total: number }>();
+  const { results } = await c.env.DB.prepare(`SELECT COUNT(*) as total FROM cards WHERE ${ACTIVE_FILTER}`).all<{ total: number }>();
   return c.json({ total: results?.[0]?.total || 0 });
 });
 

@@ -165,15 +165,20 @@ async function batchInsert(cards: Array<{ text: string; category: string }>): Pr
     const chunk = cards.slice(i, i + chunkSize);
     const values = chunk.map((_, idx) => {
       const offset = i + idx;
-      return `('gen-${Date.now()}-${offset}-${Math.random().toString(36).slice(2, 6)}', ?, ?, 1)`;
+      return `('gen-${Date.now()}-${offset}-${Math.random().toString(36).slice(2, 6)}', ?, ?, 1, ?)`;
     }).join(',\n');
 
     const params: string[] = [];
     for (const card of chunk) {
-      params.push(card.text, card.category);
+      // trending: 2ヶ月, seasonal: 3ヶ月, それ以外: null(無期限)
+      const expiry = card.category === 'trending' ? "+2 months"
+        : card.category === 'seasonal' ? "+3 months"
+        : null;
+      const expiresAt = expiry ? new Date(Date.now() + (expiry === "+2 months" ? 60 : 90) * 86400000).toISOString().slice(0, 10) : null;
+      params.push(card.text, card.category, expiresAt as string);
     }
 
-    const sql = `INSERT OR IGNORE INTO cards (id, text, category, generated) VALUES ${values}`;
+    const sql = `INSERT OR IGNORE INTO cards (id, text, category, generated, expires_at) VALUES ${values}`;
 
     try {
       await queryD1(sql, params);
@@ -183,10 +188,12 @@ async function batchInsert(cards: Array<{ text: string; category: string }>): Pr
       // 個別にフォールバック
       for (const card of chunk) {
         const id = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const expiry = card.category === 'trending' ? 60 : card.category === 'seasonal' ? 90 : null;
+        const expiresAt = expiry ? new Date(Date.now() + expiry * 86400000).toISOString().slice(0, 10) : null;
         try {
           await queryD1(
-            'INSERT OR IGNORE INTO cards (id, text, category, generated) VALUES (?, ?, ?, 1)',
-            [id, card.text, card.category]
+            'INSERT OR IGNORE INTO cards (id, text, category, generated, expires_at) VALUES (?, ?, ?, 1, ?)',
+            [id, card.text, card.category, expiresAt as string]
           );
           inserted++;
         } catch { /* skip */ }
