@@ -125,6 +125,11 @@ export function useRoom(code: string | undefined) {
         case 'error':
           console.error('Room error:', msg.message);
           // 致命的エラー（参加不可）
+          if (msg.message === 'room_not_found') {
+            setState(s => ({ ...s, error: 'room_not_found' }));
+            ws.close();
+            break;
+          }
           if (msg.message === 'room_full' || msg.message === 'game_in_progress') {
             setState(s => ({ ...s, error: msg.message }));
             ws.close();
