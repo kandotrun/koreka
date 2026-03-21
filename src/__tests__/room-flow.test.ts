@@ -4,6 +4,7 @@ import type { Card, ClientMessage, ServerMessage } from '../types';
 class MockWebSocket {
   sent: string[] = [];
   readyState = 1;
+  private _attachment: unknown = null;
 
   send(data: string) {
     this.sent.push(data);
@@ -11,6 +12,14 @@ class MockWebSocket {
 
   close() {
     this.readyState = 3;
+  }
+
+  serializeAttachment(data: unknown) {
+    this._attachment = structuredClone(data);
+  }
+
+  deserializeAttachment() {
+    return this._attachment;
   }
 
   getSent(): ServerMessage[] {
@@ -110,8 +119,10 @@ class MockRoomNamespace {
 
     if (!room) {
       const store = new Map<string, unknown>();
+      const acceptedWs: MockWebSocket[] = [];
       room = new RoomDurableObject({
-        acceptWebSocket: vi.fn(),
+        acceptWebSocket: vi.fn((ws: MockWebSocket) => { acceptedWs.push(ws); }),
+        getWebSockets: vi.fn(() => acceptedWs.filter(ws => ws.readyState === 1)),
         storage: {
           get: vi.fn(async (key: string) => store.get(key)),
           put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),

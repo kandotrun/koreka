@@ -4,7 +4,7 @@ interface PlayerState {
   id: string;
   name: string;
   ready: boolean;
-  ws: WebSocket;
+  ws: WebSocket | null;
   selectedCards: string[];
 }
 
@@ -31,6 +31,15 @@ interface PersistentRoomData {
   survivors: Card[];
   cardsPerPlayer: number;
   hands: Record<string, Card[]>;
+  votes: Record<string, string>;
+}
+
+// WebSocket attachmentに保存するプレイヤーデータ
+interface WsAttachment {
+  id: string;
+  name: string;
+  ready: boolean;
+  selectedCards: string[];
 }
 
 export class RoomDurableObject implements DurableObject {
@@ -55,23 +64,44 @@ export class RoomDurableObject implements DurableObject {
     };
   }
 
+  /**
+   * ハイバネーション復帰時にStorageとWebSocket attachmentsからステートを復元
+   */
   private async restore() {
     if (this.initialized) return;
     this.initialized = true;
+
+    // 1. Storageからゲーム状態を復元
     const saved = await this.state.storage.get<PersistentRoomData>('room');
     if (saved) {
       this.room.code = saved.code;
+      this.room.phase = saved.phase;
+      this.room.hostId = saved.hostId;
       this.room.deck = saved.deck;
       this.room.cardsPerPlayer = saved.cardsPerPlayer;
       this.room.round = saved.round;
-      this.room.survivors = saved.survivors;
-      // Restore phase only if game was in progress (lobby resets on reconnect)
-      if (saved.phase === 'selecting' || saved.phase === 'voting') {
-        this.room.phase = saved.phase;
-        // Restore hands
-        this.room.hands = new Map(Object.entries(saved.hands || {}));
+      this.room.survivors = saved.survivors || [];
+      this.room.hands = new Map(Object.entries(saved.hands || {}));
+      this.room.votes = new Map(Object.entries(saved.votes || {}));
+    }
+
+    // 2. WebSocket attachmentsからプレイヤーを復元
+    const webSockets = this.state.getWebSockets();
+    for (const ws of webSockets) {
+      try {
+        const attachment = ws.deserializeAttachment() as WsAttachment | null;
+        if (attachment?.id) {
+          this.room.players.set(attachment.id, {
+            id: attachment.id,
+            name: attachment.name,
+            ready: attachment.ready ?? false,
+            ws,
+            selectedCards: attachment.selectedCards || [],
+          });
+        }
+      } catch {
+        // 壊れたattachmentは無視
       }
-      // Don't restore hostId/players — they reconnect via WS
     }
   }
 
@@ -85,8 +115,25 @@ export class RoomDurableObject implements DurableObject {
       survivors: this.room.survivors,
       cardsPerPlayer: this.room.cardsPerPlayer,
       hands: Object.fromEntries(this.room.hands),
+      votes: Object.fromEntries(this.room.votes),
     };
     await this.state.storage.put('room', data);
+  }
+
+  /** WebSocket attachmentにプレイヤー状態を保存 */
+  private saveAttachment(player: PlayerState) {
+    if (!player.ws) return;
+    try {
+      const data: WsAttachment = {
+        id: player.id,
+        name: player.name,
+        ready: player.ready,
+        selectedCards: player.selectedCards,
+      };
+      player.ws.serializeAttachment(data);
+    } catch {
+      // WS already closed
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -138,10 +185,10 @@ export class RoomDurableObject implements DurableObject {
 
     switch (msg.type) {
       case 'join':
-        this.handleJoin(ws, msg.name, msg.playerId);
+        await this.handleJoin(ws, msg.name, msg.playerId);
         break;
       case 'ready':
-        this.handleReady(ws);
+        await this.handleReady(ws);
         break;
       case 'start':
         await this.handleStart(ws);
@@ -159,19 +206,28 @@ export class RoomDurableObject implements DurableObject {
   }
 
   async webSocketClose(ws: WebSocket) {
+    await this.restore();
     this.removePlayer(ws);
   }
 
   async webSocketError(ws: WebSocket) {
+    await this.restore();
     this.removePlayer(ws);
   }
 
-  private handleJoin(ws: WebSocket, name: string, existingId?: string) {
+  private async handleJoin(ws: WebSocket, name: string, existingId?: string) {
     // 再接続: 既存のplayerIdがあればWSだけ差し替え
     if (existingId && this.room.players.has(existingId)) {
       const player = this.room.players.get(existingId)!;
+
+      // 古いWSがあれば閉じる
+      if (player.ws && player.ws !== ws) {
+        try { player.ws.close(1000, 'reconnect'); } catch {}
+      }
+
       player.ws = ws;
       player.name = name;
+      this.saveAttachment(player);
 
       this.send(ws, {
         type: 'welcome',
@@ -193,7 +249,7 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
-    // ゲーム中は新規参加ブロック（再接続のみ許可）
+    // ゲーム中は新規参加ブロック
     if (this.room.phase !== 'waiting') {
       this.send(ws, { type: 'error', message: 'game_in_progress' });
       return;
@@ -214,11 +270,14 @@ export class RoomDurableObject implements DurableObject {
     };
 
     this.room.players.set(playerId, player);
+    this.saveAttachment(player);
 
-    // First player is the host
-    if (this.room.players.size === 1) {
+    // First player is the host (only if no host set)
+    if (!this.room.hostId || !this.room.players.has(this.room.hostId)) {
       this.room.hostId = playerId;
     }
+
+    await this.persist();
 
     this.send(ws, {
       type: 'welcome',
@@ -229,11 +288,12 @@ export class RoomDurableObject implements DurableObject {
     this.broadcastPlayers();
   }
 
-  private handleReady(ws: WebSocket) {
+  private async handleReady(ws: WebSocket) {
     const player = this.findPlayer(ws);
     if (!player) return;
 
     player.ready = !player.ready;
+    this.saveAttachment(player);
     this.broadcastPlayers();
   }
 
@@ -298,7 +358,7 @@ export class RoomDurableObject implements DurableObject {
     const hand = this.room.hands.get(player.id);
     if (!hand) return;
 
-    // Validate: selected cards must be subset of hand
+    // Validate
     const handIds = new Set(hand.map(c => c.id));
     const validSelection = cardIds.every(id => handIds.has(id));
     if (!validSelection || cardIds.length === 0) {
@@ -306,19 +366,18 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
-    // Must discard at least 1 card (unless only 1 card in hand)
     if (cardIds.length >= hand.length && hand.length > 1) {
       this.send(ws, { type: 'error', message: 'invalid_selection' });
       return;
     }
 
     player.selectedCards = cardIds;
+    this.saveAttachment(player);
 
     // Check if all players have selected
     const allSelected = [...this.room.players.values()].every(p => p.selectedCards.length > 0);
 
     if (!allSelected) {
-      // Broadcast waiting status
       const pending = [...this.room.players.values()]
         .filter(p => p.selectedCards.length === 0)
         .map(p => p.name);
@@ -326,7 +385,6 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
-    // All selected — pass cards
     await this.passCards();
   }
 
@@ -335,7 +393,6 @@ export class RoomDurableObject implements DurableObject {
     const playerIds = [...this.room.players.keys()];
     const playerCount = playerIds.length;
 
-    // Collect kept cards per player
     const keptCards = new Map<string, Card[]>();
     let totalRemaining = 0;
 
@@ -346,13 +403,11 @@ export class RoomDurableObject implements DurableObject {
       totalRemaining += kept.length;
     }
 
-    // Check convergence: total remaining <= playerCount
     if (totalRemaining <= playerCount) {
       await this.startFinalVote(keptCards);
       return;
     }
 
-    // Pass cards to next player (right rotation)
     this.room.round++;
     const newHands = new Map<string, Card[]>();
 
@@ -365,12 +420,11 @@ export class RoomDurableObject implements DurableObject {
 
     this.room.hands = newHands;
 
-    // Reset selections
     for (const player of this.room.players.values()) {
       player.selectedCards = [];
+      this.saveAttachment(player);
     }
 
-    // Send new hand to each player
     this.room.phase = 'selecting';
     for (const [playerId, hand] of this.room.hands) {
       const player = this.room.players.get(playerId);
@@ -387,7 +441,6 @@ export class RoomDurableObject implements DurableObject {
     this.room.phase = 'voting';
     this.room.votes = new Map();
 
-    // Collect all surviving cards
     const allCards: Card[] = [];
     const seen = new Set<string>();
     for (const cards of keptCards.values()) {
@@ -401,9 +454,9 @@ export class RoomDurableObject implements DurableObject {
 
     this.room.survivors = allCards;
 
-    // Reset selections
     for (const player of this.room.players.values()) {
       player.selectedCards = [];
+      this.saveAttachment(player);
     }
 
     this.broadcast({ type: 'final_vote', cards: allCards });
@@ -427,7 +480,6 @@ export class RoomDurableObject implements DurableObject {
 
     this.room.votes.set(player.id, cardId);
 
-    // Check if all voted
     if (this.room.votes.size >= this.room.players.size) {
       await this.resolveResult();
     } else {
@@ -441,13 +493,11 @@ export class RoomDurableObject implements DurableObject {
   private async resolveResult() {
     this.room.phase = 'result';
 
-    // Count votes
     const voteCounts = new Map<string, number>();
     for (const cardId of this.room.votes.values()) {
       voteCounts.set(cardId, (voteCounts.get(cardId) || 0) + 1);
     }
 
-    // Find max
     let maxVotes = 0;
     const topCards: string[] = [];
     for (const [cardId, count] of voteCounts) {
@@ -460,12 +510,10 @@ export class RoomDurableObject implements DurableObject {
       }
     }
 
-    // Tiebreak: random
     const winnerId = topCards[Math.floor(Math.random() * topCards.length)];
     const winnerCard = this.room.survivors.find(c => c.id === winnerId)!;
     this.room.result = winnerCard;
 
-    // Build votes map (playerId → cardId)
     const votes: Record<string, string> = {};
     for (const [playerId, cardId] of this.room.votes) {
       votes[playerId] = cardId;
@@ -486,23 +534,18 @@ export class RoomDurableObject implements DurableObject {
     const player = this.findPlayer(ws);
     if (!player) return;
 
-    // WSを無効化（再接続で復帰できるように全フェーズ共通）
-    // @ts-expect-error null ws marker for disconnected player
     player.ws = null;
 
-    // 30秒以内に再接続しなければ削除（waitingフェーズのみ）
+    // waitingフェーズなら30秒後に削除
     if (this.room.phase === 'waiting') {
-      const playerId = player.id;
       this.state.storage.setAlarm(Date.now() + 30_000).catch(() => {});
-      // Store pending disconnect
-      this.state.storage.put(`disconnect:${playerId}`, Date.now()).catch(() => {});
     }
 
     this.broadcastPlayers();
   }
 
   async alarm() {
-    // 30秒経過: 再接続しなかったプレイヤーを削除
+    await this.restore();
     if (this.room.phase !== 'waiting') return;
 
     const toRemove: string[] = [];
@@ -515,17 +558,16 @@ export class RoomDurableObject implements DurableObject {
     for (const id of toRemove) {
       this.room.players.delete(id);
       this.room.hands.delete(id);
-      await this.state.storage.delete(`disconnect:${id}`);
     }
 
     if (this.room.players.size > 0) {
-      // Transfer host if needed
       if (toRemove.includes(this.room.hostId)) {
         const firstPlayer = this.room.players.values().next().value;
         if (firstPlayer) {
           this.room.hostId = firstPlayer.id;
         }
       }
+      await this.persist();
       this.broadcastPlayers();
     }
   }

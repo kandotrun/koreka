@@ -6,11 +6,18 @@ import type { Card, ClientMessage, ServerMessage } from '../types';
 class MockWebSocket {
   sent: string[] = [];
   readyState = 1; // OPEN
+  private _attachment: unknown = null;
   send(data: string) {
     this.sent.push(data);
   }
   close() {
     this.readyState = 3;
+  }
+  serializeAttachment(data: unknown) {
+    this._attachment = structuredClone(data);
+  }
+  deserializeAttachment() {
+    return this._attachment;
   }
   getSent(): ServerMessage[] {
     return this.sent.map(s => JSON.parse(s));
@@ -56,8 +63,10 @@ const { RoomDurableObject } = await import('../durable-objects/room');
 
 function makeMockState(): DurableObjectState {
   const store = new Map<string, unknown>();
+  const acceptedWs: MockWebSocket[] = [];
   return {
-    acceptWebSocket: vi.fn(),
+    acceptWebSocket: vi.fn((ws: MockWebSocket) => { acceptedWs.push(ws); }),
+    getWebSockets: vi.fn(() => acceptedWs.filter(ws => ws.readyState === 1)),
     storage: {
       get: vi.fn(async (key: string) => store.get(key)),
       put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
