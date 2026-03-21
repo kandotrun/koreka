@@ -115,7 +115,7 @@ export default function Result() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.0 }}
-        href={`https://chat.openai.com/?q=${encodeURIComponent(`「${card.text}」をやることになりました！具体的なプラン・準備・おすすめを教えてください。`)}`}
+        href={`https://chatgpt.com/?q=${encodeURIComponent(`「${card.text}」をやることになりました！具体的なプラン・準備・おすすめを教えてください。`)}`}
         target="_blank"
         rel="noopener noreferrer"
         style={{
