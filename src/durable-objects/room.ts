@@ -1,4 +1,5 @@
 import type { Card, PlayerInfo, RoomPhase, ServerMessage, ClientMessage, RoomPublicState } from '../types';
+import type { Env } from '../env';
 
 interface PlayerState {
   id: string;
@@ -44,11 +45,13 @@ interface WsAttachment {
 
 export class RoomDurableObject implements DurableObject {
   private state: DurableObjectState;
+  private env: Env;
   private room: InternalRoomState;
   private initialized = false;
 
-  constructor(state: DurableObjectState, env: unknown) {
+  constructor(state: DurableObjectState, env: Env) {
     this.state = state;
+    this.env = env;
     this.room = {
       code: '',
       phase: 'waiting',
@@ -533,6 +536,15 @@ export class RoomDurableObject implements DurableObject {
 
     this.broadcast({ type: 'result', card: winnerCard, votes });
     await this.persist();
+
+    // Save result_card_id and finished_at to D1
+    try {
+      await this.env.DB.prepare(
+        'UPDATE rooms SET result_card_id = ?, player_count = ?, finished_at = datetime(\'now\') WHERE code = ?'
+      ).bind(winnerCard.id, this.room.players.size, this.room.code).run();
+    } catch {
+      // D1 write failure is non-fatal for game flow
+    }
   }
 
   private findPlayer(ws: WebSocket): PlayerState | undefined {
