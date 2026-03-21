@@ -107,8 +107,13 @@ export function useRoom(code: string | undefined) {
         case 'error':
           console.error('Room error:', msg.message);
           // invalid_selectionエラー時はカード再表示（全部キープしちゃった場合等）
-          if (msg.message === 'invalid_selection' && state.phase === 'selecting') {
-            setState(s => ({ ...s, cards: [...s.cards], pending: [] }));
+          if (msg.message === 'invalid_selection') {
+            setState(s => {
+              if (s.phase === 'selecting' && s.cards.length > 0) {
+                return { ...s, cards: [...s.cards], pending: [] };
+              }
+              return s;
+            });
           }
           break;
       }
