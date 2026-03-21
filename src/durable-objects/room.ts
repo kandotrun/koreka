@@ -486,28 +486,48 @@ export class RoomDurableObject implements DurableObject {
     const player = this.findPlayer(ws);
     if (!player) return;
 
-    // ゲーム中はプレイヤーを削除しない（再接続で復帰できるように）
-    // WSだけ無効化しておく
-    if (this.room.phase !== 'waiting') {
-      // @ts-expect-error null ws marker for disconnected player
-      player.ws = null;
-      return;
-    }
+    // WSを無効化（再接続で復帰できるように全フェーズ共通）
+    // @ts-expect-error null ws marker for disconnected player
+    player.ws = null;
 
-    this.room.players.delete(player.id);
-    this.room.hands.delete(player.id);
-
-    if (this.room.players.size === 0) return;
-
-    // Transfer host if needed
-    if (player.id === this.room.hostId) {
-      const firstPlayer = this.room.players.values().next().value;
-      if (firstPlayer) {
-        this.room.hostId = firstPlayer.id;
-      }
+    // 30秒以内に再接続しなければ削除（waitingフェーズのみ）
+    if (this.room.phase === 'waiting') {
+      const playerId = player.id;
+      this.state.storage.setAlarm(Date.now() + 30_000).catch(() => {});
+      // Store pending disconnect
+      this.state.storage.put(`disconnect:${playerId}`, Date.now()).catch(() => {});
     }
 
     this.broadcastPlayers();
+  }
+
+  async alarm() {
+    // 30秒経過: 再接続しなかったプレイヤーを削除
+    if (this.room.phase !== 'waiting') return;
+
+    const toRemove: string[] = [];
+    for (const [id, player] of this.room.players) {
+      if (player.ws === null) {
+        toRemove.push(id);
+      }
+    }
+
+    for (const id of toRemove) {
+      this.room.players.delete(id);
+      this.room.hands.delete(id);
+      await this.state.storage.delete(`disconnect:${id}`);
+    }
+
+    if (this.room.players.size > 0) {
+      // Transfer host if needed
+      if (toRemove.includes(this.room.hostId)) {
+        const firstPlayer = this.room.players.values().next().value;
+        if (firstPlayer) {
+          this.room.hostId = firstPlayer.id;
+        }
+      }
+      this.broadcastPlayers();
+    }
   }
 
   private getPublicState(): RoomPublicState {

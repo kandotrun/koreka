@@ -62,6 +62,7 @@ function makeMockState(): DurableObjectState {
       get: vi.fn(async (key: string) => store.get(key)),
       put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
       delete: vi.fn(async (key: string) => store.delete(key)),
+      setAlarm: vi.fn(async () => {}),
     },
   } as unknown as DurableObjectState;
 }
@@ -529,7 +530,7 @@ describe('RoomDurableObject', () => {
   });
 
   describe('プレイヤー切断', () => {
-    it('プレイヤーが切断するとプレイヤーリストから除外される', async () => {
+    it('プレイヤーが切断してもリストには残る（30秒猶予）', async () => {
       await initRoom(room, '1234', makeCards(10));
       const ws1 = new MockWebSocket();
       const ws2 = new MockWebSocket();
@@ -539,15 +540,15 @@ describe('RoomDurableObject', () => {
 
       await room.webSocketClose(ws2 as unknown as WebSocket);
 
+      // 切断後もプレイヤーは残る（ws=null, 30秒後にalarmで削除）
       const players = getLastSent(ws1);
       expect(players.type).toBe('players');
       if (players.type === 'players') {
-        expect(players.players.length).toBe(1);
-        expect(players.players[0].name).toBe('Alice');
+        expect(players.players.length).toBe(2);
       }
     });
 
-    it('ホストが切断すると別のプレイヤーがホストになる', async () => {
+    it('alarmでws=nullプレイヤーが削除され、ホストが移る', async () => {
       await initRoom(room, '1234', makeCards(10));
       const ws1 = new MockWebSocket();
       const ws2 = new MockWebSocket();
@@ -561,7 +562,9 @@ describe('RoomDurableObject', () => {
       // Alice (host) disconnects
       await room.webSocketClose(ws1 as unknown as WebSocket);
 
-      // Bob should receive updated player list
+      // alarm発火で削除
+      await room.alarm();
+
       const players = getLastSent(ws2);
       expect(players.type).toBe('players');
       if (players.type === 'players') {

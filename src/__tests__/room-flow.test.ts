@@ -116,6 +116,7 @@ class MockRoomNamespace {
           get: vi.fn(async (key: string) => store.get(key)),
           put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
           delete: vi.fn(async (key: string) => store.delete(key)),
+          setAlarm: vi.fn(async () => {}),
         },
       } as unknown as DurableObjectState, {});
       this.rooms.set(id.code, room);
