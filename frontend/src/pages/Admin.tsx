@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../contexts/I18nContext';
 
 interface StatsData {
   totalCards: number;
@@ -7,28 +8,116 @@ interface StatsData {
   topCards: Array<{ text: string; category: string; timesSelected: number }>;
 }
 
-const categoryMeta: Record<string, { name: string; icon: string }> = {
-  adventure: { name: '冒険', icon: '🏔️' },
-  chill: { name: 'まったり', icon: '☕' },
-  food: { name: 'グルメ', icon: '🍜' },
-  night: { name: '夜遊び', icon: '🌙' },
-  creative: { name: 'クリエイティブ', icon: '🎨' },
-  random: { name: 'カオス', icon: '🎲' },
-  spicy: { name: 'スパイシー', icon: '🔥' },
-  trending: { name: '時事ネタ', icon: '📰' },
-  seasonal: { name: '季節', icon: '🌸' },
+const categoryMeta: Record<string, { icon: string }> = {
+  adventure: { icon: '🏔️' },
+  chill: { icon: '☕' },
+  food: { icon: '🍜' },
+  night: { icon: '🌙' },
+  creative: { icon: '🎨' },
+  random: { icon: '🎲' },
+  spicy: { icon: '🔥' },
+  trending: { icon: '📰' },
+  seasonal: { icon: '🌸' },
 };
 
 export default function Admin() {
+  const { t } = useI18n();
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('adminToken'));
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const handleLogin = async () => {
+    if (!password.trim()) return;
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { token: string };
+        localStorage.setItem('adminToken', data.token);
+        setToken(data.token);
+        setPassword('');
+      } else {
+        setLoginError(t('admin.login_failed'));
+      }
+    } catch {
+      setLoginError(t('admin.login_failed'));
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    setToken(null);
+    setStats(null);
+    setError(null);
+  };
+
   useEffect(() => {
-    fetch('/api/admin/stats')
-      .then(res => res.json())
-      .then(data => setStats(data))
-      .catch(() => setError('統計データの取得に失敗しました'));
-  }, []);
+    if (!token) return;
+    fetch('/api/admin/stats', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        if (res.status === 401) {
+          handleLogout();
+          setError(t('admin.auth_error'));
+          return null;
+        }
+        return res.json();
+      })
+      .then(data => { if (data) setStats(data); })
+      .catch(() => setError(t('admin.fetch_error')));
+  }, [token]);
+
+  // Login form
+  if (!token) {
+    return (
+      <div className="page" style={{ justifyContent: 'center', gap: 'var(--space-lg)' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 900, textAlign: 'center' }}>
+          {t('admin.login_title')}
+        </h1>
+        <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            placeholder={t('admin.password')}
+            autoFocus
+            style={{
+              width: '100%',
+              height: 48,
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text)',
+              fontSize: 16,
+              padding: '0 16px',
+            }}
+          />
+          {loginError && (
+            <p style={{ color: 'var(--danger)', fontSize: 14 }}>{loginError}</p>
+          )}
+          <button
+            className="btn-primary"
+            disabled={!password.trim() || loginLoading}
+            onClick={handleLogin}
+          >
+            {loginLoading ? '...' : t('admin.login')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -41,16 +130,25 @@ export default function Admin() {
   if (!stats) {
     return (
       <div className="page" style={{ justifyContent: 'center' }}>
-        <p style={{ color: 'var(--text-sub)' }}>読み込み中...</p>
+        <p style={{ color: 'var(--text-sub)' }}>{t('common.loading')}</p>
       </div>
     );
   }
 
   return (
     <div className="page" style={{ padding: 'var(--space-lg)', maxWidth: 600, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 'var(--space-xl)' }}>
-        管理者ダッシュボード
-      </h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-xl)' }}>
+        <h1 style={{ fontSize: 28, fontWeight: 900 }}>
+          {t('admin.title')}
+        </h1>
+        <button
+          className="btn-ghost"
+          onClick={handleLogout}
+          style={{ fontSize: 14 }}
+        >
+          {t('admin.logout')}
+        </button>
+      </div>
 
       {/* Summary Stats */}
       <div style={{
@@ -60,9 +158,9 @@ export default function Admin() {
         marginBottom: 'var(--space-xl)',
       }}>
         {[
-          { label: 'お題カード', value: stats.totalCards },
-          { label: 'ルーム数', value: stats.totalRooms },
-          { label: '思い出数', value: stats.totalMemories },
+          { label: t('admin.total_cards'), value: stats.totalCards },
+          { label: t('admin.total_rooms'), value: stats.totalRooms },
+          { label: t('admin.total_memories'), value: stats.totalMemories },
         ].map(item => (
           <div key={item.label} style={{
             background: 'var(--surface)',
@@ -82,14 +180,14 @@ export default function Admin() {
 
       {/* Top Cards */}
       <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 'var(--space-md)' }}>
-        人気のお題 TOP 20
+        {t('admin.top_cards')}
       </h2>
       {stats.topCards.length === 0 ? (
-        <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>まだデータがありません</p>
+        <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>{t('admin.no_data')}</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
           {stats.topCards.map((card, i) => {
-            const meta = categoryMeta[card.category] || { name: card.category, icon: '📋' };
+            const meta = categoryMeta[card.category] || { icon: '📋' };
             return (
               <div key={i} style={{
                 display: 'flex',
@@ -112,7 +210,7 @@ export default function Admin() {
                   borderRadius: 'var(--radius-full)',
                   padding: '2px 8px',
                 }}>
-                  {card.timesSelected}回
+                  {t('admin.times', card.timesSelected)}
                 </span>
               </div>
             );

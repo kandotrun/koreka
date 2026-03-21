@@ -5,11 +5,13 @@ import { useRoomContext } from '../contexts/RoomContext';
 import SwipeArea from '../components/SwipeArea';
 import Card from '../components/Card';
 import { sound } from '../lib/sound';
+import { useI18n } from '../contexts/I18nContext';
 
 export default function Game() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const room = useRoomContext();
+  const { t } = useI18n();
   const [selecting, setSelecting] = useState(false);
 
   // 新しいカードが来たら選択状態をリセット
@@ -95,10 +97,10 @@ export default function Game() {
           animate={{ opacity: 1, y: 0 }}
           style={{ fontSize: 24, fontWeight: 700, marginBottom: 'var(--space-lg)', textAlign: 'center' }}
         >
-          最終投票
+          {t('game.final_vote')}
         </motion.h2>
         <p style={{ color: 'var(--text-sub)', fontSize: 14, marginBottom: 'var(--space-xl)' }}>
-          1枚だけ選んでください
+          {t('game.pick_one')}
         </p>
 
         <div style={{
@@ -136,11 +138,11 @@ export default function Game() {
         style={{ textAlign: 'center' }}
       >
         <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 'var(--space-md)' }}>
-          {selecting ? '他のプレイヤーを待っています...' : 'カードを配布中...'}
+          {selecting ? t('game.waiting_others') : t('game.dealing')}
         </p>
         {room.pending.length > 0 && (
           <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>
-            {room.pending.join('、')} が選択中
+            {t('game.selecting', room.pending.join('、'))}
           </p>
         )}
       </motion.div>
