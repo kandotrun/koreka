@@ -44,6 +44,7 @@ const translations: Record<string, Record<Lang, string>> = {
     ko: '마지막에 남은 한 장이 모두의 답.',
   },
   'home.sample_title': { ja: '— お題の例 —', en: '— Sample Topics —', ko: '— 주제 예시 —' },
+  'home.popular_topics': { ja: '人気のお題', en: 'Popular Topics', ko: '인기 주제' },
   'home.step1': { ja: 'ルーム作成', en: 'Create Room', ko: '방 만들기' },
   'home.step2': { ja: 'カード選別', en: 'Pick Cards', ko: '카드 선택' },
   'home.step3': { ja: 'これか！', en: 'Koreka!', ko: '이거다!' },

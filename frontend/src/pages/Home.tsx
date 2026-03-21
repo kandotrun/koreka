@@ -39,6 +39,8 @@ export default function Home() {
   const [mode, setMode] = useState<'home' | 'join' | 'create'>('home');
   const { data: sampleData } = useSWR<{ cards?: SampleCard[] }>('/api/cards/sample?limit=100', fetcher);
   const sampleCards = sampleData?.cards ?? [];
+  const { data: popularData } = useSWR<{ cards?: (SampleCard & { timesSelected: number })[] }>('/api/cards/popular?limit=100', fetcher);
+  const popularCards: SampleCard[] = (popularData?.cards ?? []).map(c => ({ id: c.id, text: c.text, category: c.category, generated: c.generated ? 1 : 0 }));
   const allCategories = Object.keys(categoryConfig) as Array<keyof typeof categoryConfig>;
 
   const [name, setName] = useState('');
@@ -301,6 +303,39 @@ export default function Home() {
                 </>
               );
             })()}
+            {/* 3行目: 人気のお題 TOP100 */}
+            {popularCards.length > 0 && (
+              <>
+                <p style={{ fontSize: 11, color: 'var(--text-sub)', textAlign: 'center', letterSpacing: '0.1em', marginTop: 'var(--space-sm)' }}>
+                  — 🔥 {t('home.popular_topics')} —
+                </p>
+                <div className="marquee-container">
+                  <div className="marquee-track">
+                    {[...popularCards, ...popularCards].map((card, i) => {
+                      const cat = categoryConfig[card.category] || { icon: '📋', color: '#8B8B9E' };
+                      return (
+                        <div
+                          key={`popular-${card.id}-${i}`}
+                          style={{
+                            minWidth: 130,
+                            padding: '10px 12px',
+                            background: `linear-gradient(135deg, ${cat.color}20, ${cat.color}10)`,
+                            border: `1px solid ${cat.color}30`,
+                            borderRadius: 'var(--radius-md)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span style={{ fontSize: 13 }}>🔥</span>
+                          <p style={{ fontSize: 11, marginTop: 4, lineHeight: 1.4, color: 'var(--text)' }}>
+                            {card.text}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* 使い方 */}
