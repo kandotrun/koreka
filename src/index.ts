@@ -42,7 +42,7 @@ app.get('/api/cards/categories', async (c) => {
 // お題サンプル取得（QA用）
 app.get('/api/cards/sample', async (c) => {
   const category = c.req.query('category');
-  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
+  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 200);
 
   type CardRow = { id: string; text: string; category: string; generated: number };
 

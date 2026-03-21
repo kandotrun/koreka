@@ -33,7 +33,7 @@ export default function Home() {
   const [sampleCards, setSampleCards] = useState<SampleCard[]>([]);
 
   useEffect(() => {
-    fetch('/api/cards/sample?limit=20')
+    fetch('/api/cards/sample?limit=100')
       .then(res => res.json())
       .then(data => setSampleCards(data.cards || []))
       .catch(() => {});
@@ -152,13 +152,13 @@ export default function Home() {
             </p>
           </div>
 
-          {/* お題サンプル（自動スクロール） */}
+          {/* お題サンプル（2行交互スクロール） */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
             <p style={{ fontSize: 11, color: 'var(--text-sub)', textAlign: 'center', letterSpacing: '0.1em' }}>
               — お題の例 —
             </p>
             {(() => {
-              const cards = sampleCards.length > 0 ? sampleCards : [
+              const fallback: SampleCard[] = [
                 { id: 'f1', text: '夜の海にみんなで行く', category: 'adventure', generated: 0 },
                 { id: 'f2', text: '知らないバーに飛び込む', category: 'night', generated: 0 },
                 { id: 'f3', text: '屋台で一番安いメニューだけで晩ごはん', category: 'food', generated: 0 },
@@ -168,34 +168,47 @@ export default function Home() {
                 { id: 'f7', text: 'じゃんけんで負けた人が奢る', category: 'random', generated: 0 },
                 { id: 'f8', text: 'カラオケで点数バトルする', category: 'night', generated: 0 },
               ];
-              // duplicate for seamless loop
-              const doubled = [...cards, ...cards];
-              return (
-                <div className="marquee-container">
-                  <div className="marquee-track">
-                    {doubled.map((card, i) => {
-                      const cat = categoryConfig[card.category] || { icon: '📋', color: '#8B8B9E' };
-                      return (
-                        <div
-                          key={`${card.id}-${i}`}
-                          style={{
-                            minWidth: 140,
-                            padding: '12px 14px',
-                            background: `linear-gradient(135deg, ${cat.color}15, ${cat.color}08)`,
-                            border: `1px solid ${cat.color}25`,
-                            borderRadius: 'var(--radius-md)',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <span style={{ fontSize: 14 }}>{cat.icon}</span>
-                          <p style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5, color: 'var(--text)' }}>
-                            {card.text}
-                          </p>
-                        </div>
-                      );
-                    })}
+              const cards = sampleCards.length > 0 ? sampleCards : fallback;
+              const mid = Math.ceil(cards.length / 2);
+              const row1 = cards.slice(0, mid);
+              const row2 = cards.slice(mid);
+
+              const renderRow = (items: SampleCard[], reverse: boolean) => {
+                const doubled = [...items, ...items];
+                return (
+                  <div className="marquee-container">
+                    <div className={reverse ? 'marquee-track marquee-reverse' : 'marquee-track'}>
+                      {doubled.map((card, i) => {
+                        const cat = categoryConfig[card.category] || { icon: '📋', color: '#8B8B9E' };
+                        return (
+                          <div
+                            key={`${card.id}-${i}`}
+                            style={{
+                              minWidth: 130,
+                              padding: '10px 12px',
+                              background: `linear-gradient(135deg, ${cat.color}15, ${cat.color}08)`,
+                              border: `1px solid ${cat.color}25`,
+                              borderRadius: 'var(--radius-md)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span style={{ fontSize: 13 }}>{cat.icon}</span>
+                            <p style={{ fontSize: 11, marginTop: 4, lineHeight: 1.4, color: 'var(--text)' }}>
+                              {card.text}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                );
+              };
+
+              return (
+                <>
+                  {renderRow(row1, false)}
+                  {renderRow(row2, true)}
+                </>
               );
             })()}
           </div>
