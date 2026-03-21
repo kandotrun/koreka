@@ -42,19 +42,35 @@ app.get('/api/cards/categories', async (c) => {
 // お題サンプル取得（QA用）
 app.get('/api/cards/sample', async (c) => {
   const category = c.req.query('category');
-  const limit = parseInt(c.req.query('limit') || '20');
-  let query = 'SELECT id, text, category, generated FROM cards';
-  const params: string[] = [];
+  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
+
+  type CardRow = { id: string; text: string; category: string; generated: number };
+
   if (category) {
-    query += ' WHERE category = ?';
-    params.push(category);
+    // Single category
+    const { results } = await c.env.DB.prepare(
+      'SELECT id, text, category, generated FROM cards WHERE category = ? ORDER BY RANDOM() LIMIT ?'
+    ).bind(category, limit).all<CardRow>();
+    return c.json({ cards: results || [], count: (results || []).length });
   }
-  query += ' ORDER BY RANDOM() LIMIT ?';
-  params.push(String(Math.min(limit, 50)));
-  const { results } = await c.env.DB.prepare(query).bind(...params).all<{
-    id: string; text: string; category: string; generated: number;
-  }>();
-  return c.json({ cards: results || [], count: (results || []).length });
+
+  // All categories — pick evenly from each
+  const categories = ['adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy'];
+  const perCat = Math.max(Math.ceil(limit / categories.length), 2);
+  const all: CardRow[] = [];
+  for (const cat of categories) {
+    const { results } = await c.env.DB.prepare(
+      'SELECT id, text, category, generated FROM cards WHERE category = ? ORDER BY RANDOM() LIMIT ?'
+    ).bind(cat, perCat).all<CardRow>();
+    if (results) all.push(...results);
+  }
+  // Shuffle and trim to requested limit
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  const cards = all.slice(0, limit);
+  return c.json({ cards, count: cards.length });
 });
 
 // お題総数
