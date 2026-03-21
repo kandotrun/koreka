@@ -13,6 +13,10 @@ jobs:
       - run: npm install
       - name: Execute SQL
         run: |
+          # マイグレーション実行（冪等）
+          echo "🔧 Running migrations..."
+          npx wrangler d1 execute koreka-db --remote --file=src/db/add-expires-at.sql || true
+          # トレンドカード投入
           for f in src/db/trending-*.sql; do
             echo "📦 Executing $f..."
             npx wrangler d1 execute koreka-db --remote --file="$f"
