@@ -26,7 +26,7 @@ rooms.post('/', async (c) => {
   }
 
   query += ' ORDER BY RANDOM() LIMIT ?';
-  const cardsPerPlayer = body.settings?.cardsPerPlayer || 5;
+  const cardsPerPlayer = body.settings?.cardsPerPlayer || 20;
   // We'll get more cards than needed so the game has a good pool
   params.push(String(cardsPerPlayer * 8));
 

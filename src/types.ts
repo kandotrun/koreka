@@ -30,7 +30,7 @@ export interface RoomState {
 
 // Client → Server messages
 export type ClientMessage =
-  | { type: 'join'; name: string }
+  | { type: 'join'; name: string; playerId?: string }
   | { type: 'ready' }
   | { type: 'start' }
   | { type: 'select'; cardIds: string[] }

@@ -44,7 +44,10 @@ export function useRoom(code: string | undefined) {
       setState(s => ({ ...s, connected: true }));
       // 接続完了時に自動joinする（race condition防止）
       if (autoJoinNameRef.current) {
-        ws.send(JSON.stringify({ type: 'join', name: autoJoinNameRef.current }));
+        const savedPlayerId = window.sessionStorage.getItem('playerId');
+        const joinMsg: Record<string, string> = { type: 'join', name: autoJoinNameRef.current };
+        if (savedPlayerId) joinMsg.playerId = savedPlayerId;
+        ws.send(JSON.stringify(joinMsg));
         autoJoinNameRef.current = null;
       }
     };
@@ -66,6 +69,7 @@ export function useRoom(code: string | undefined) {
 
       switch (msg.type) {
         case 'welcome':
+          window.sessionStorage.setItem('playerId', msg.playerId);
           setState(s => ({
             ...s,
             playerId: msg.playerId,

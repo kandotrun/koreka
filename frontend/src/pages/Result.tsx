@@ -110,6 +110,36 @@ export default function Result() {
         {voteCount}/{totalPlayers}人が選択 🔥
       </motion.p>
 
+      {/* ChatGPT相談ボタン */}
+      <motion.a
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.0 }}
+        href={`https://chat.openai.com/?q=${encodeURIComponent(`「${card.text}」をやることになりました！具体的なプラン・準備・おすすめを教えてください。`)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          marginTop: 'var(--space-lg)',
+          width: '100%',
+          maxWidth: 320,
+          padding: '14px 20px',
+          background: 'linear-gradient(135deg, #10A37F 0%, #1A7F64 100%)',
+          color: 'white',
+          borderRadius: 'var(--radius-md)',
+          fontWeight: 700,
+          fontSize: 15,
+          textDecoration: 'none',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        🤖 ChatGPTに相談する
+      </motion.a>
+
       {/* Actions */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -118,7 +148,7 @@ export default function Result() {
         style={{
           display: 'flex',
           gap: 'var(--space-md)',
-          marginTop: 'var(--space-xl)',
+          marginTop: 'var(--space-md)',
           width: '100%',
           maxWidth: 320,
         }}

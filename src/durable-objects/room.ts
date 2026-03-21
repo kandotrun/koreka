@@ -51,7 +51,7 @@ export class RoomDurableObject implements DurableObject {
       survivors: [],
       result: null,
       votes: new Map(),
-      cardsPerPlayer: 5,
+      cardsPerPlayer: 20,
     };
   }
 
@@ -138,7 +138,7 @@ export class RoomDurableObject implements DurableObject {
 
     switch (msg.type) {
       case 'join':
-        this.handleJoin(ws, msg.name);
+        this.handleJoin(ws, msg.name, msg.playerId);
         break;
       case 'ready':
         this.handleReady(ws);
@@ -166,7 +166,33 @@ export class RoomDurableObject implements DurableObject {
     this.removePlayer(ws);
   }
 
-  private handleJoin(ws: WebSocket, name: string) {
+  private handleJoin(ws: WebSocket, name: string, existingId?: string) {
+    // 再接続: 既存のplayerIdがあればWSだけ差し替え
+    if (existingId && this.room.players.has(existingId)) {
+      const player = this.room.players.get(existingId)!;
+      player.ws = ws;
+      player.name = name; // 名前更新も許可
+
+      this.send(ws, {
+        type: 'welcome',
+        playerId: existingId,
+        roomState: this.getPublicState(),
+      });
+
+      // ゲーム中なら手札も再送
+      if (this.room.phase === 'selecting') {
+        const hand = this.room.hands.get(existingId);
+        if (hand) {
+          this.send(ws, { type: 'deal', cards: hand, round: this.room.round });
+        }
+      } else if (this.room.phase === 'voting') {
+        this.send(ws, { type: 'final_vote', cards: this.room.survivors });
+      }
+
+      this.broadcastPlayers();
+      return;
+    }
+
     if (this.room.phase !== 'waiting') {
       this.send(ws, { type: 'error', message: 'game_in_progress' });
       return;
