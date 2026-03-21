@@ -13,6 +13,7 @@ export default function Game() {
   const room = useRoomContext();
   const { t } = useI18n();
   const [selecting, setSelecting] = useState(false);
+  const [soundOn, setSoundOn] = useState(sound.enabled);
 
   // 新しいカードが来たら選択状態をリセット
   useEffect(() => {
@@ -68,7 +69,26 @@ export default function Game() {
           <span style={{ color: 'var(--text-sub)', fontSize: 14 }}>
             Round {room.round}
           </span>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              onClick={() => { sound.toggle(); setSoundOn(sound.enabled); }}
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-full)',
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 14,
+                cursor: 'pointer',
+                marginRight: 4,
+              }}
+              title={soundOn ? 'Sound ON' : 'Sound OFF'}
+            >
+              {soundOn ? '🔊' : '🔇'}
+            </button>
             {room.players.map(p => (
               <div
                 key={p.id}

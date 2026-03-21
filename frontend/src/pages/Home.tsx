@@ -48,6 +48,7 @@ export default function Home() {
   const [name, setName] = useState('');
   const [code, setCode] = useState(['', '', '', '']);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set(allCategories));
+  const [customCardsText, setCustomCardsText] = useState('');
   const [loading, setLoading] = useState(false);
   const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -76,9 +77,15 @@ export default function Home() {
     setLoading(true);
     try {
       const settings: Record<string, unknown> = {};
-      // 全選択 or 0選択 = 全カテゴリ（フィルターなし）
-      if (selectedCategories.size > 0 && selectedCategories.size < allCategories.length) {
-        settings.categories = Array.from(selectedCategories);
+      // カスタムカードが入力されている場合
+      const customLines = customCardsText.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 50);
+      if (customLines.length > 0) {
+        settings.customCards = customLines;
+      } else {
+        // 全選択 or 0選択 = 全カテゴリ（フィルターなし）
+        if (selectedCategories.size > 0 && selectedCategories.size < allCategories.length) {
+          settings.categories = Array.from(selectedCategories);
+        }
       }
       const res = await fetch('/api/rooms', {
         method: 'POST',
@@ -432,6 +439,37 @@ export default function Home() {
               {selectedCategories.size === 0 && (
                 <p style={{ fontSize: 11, color: 'var(--text-sub)', marginTop: 6 }}>
                   {t('home.no_category_hint')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Custom deck (create mode only) */}
+          {mode === 'create' && (
+            <div>
+              <label style={{ fontSize: 12, color: 'var(--text-sub)', marginBottom: 4, display: 'block' }}>
+                {t('home.custom_deck_label')}
+              </label>
+              <textarea
+                value={customCardsText}
+                onChange={e => setCustomCardsText(e.target.value)}
+                placeholder={t('home.custom_deck_placeholder')}
+                style={{
+                  width: '100%',
+                  minHeight: 80,
+                  padding: 'var(--space-sm)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  fontSize: 14,
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {customCardsText.trim().length > 0 && (
+                <p style={{ fontSize: 11, color: 'var(--primary)', marginTop: 4 }}>
+                  {t('home.custom_deck_hint')}
                 </p>
               )}
             </div>
