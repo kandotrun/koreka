@@ -86,6 +86,29 @@ app.get('/api/cards/sample', async (c) => {
   return c.json({ cards, count: cards.length });
 });
 
+// 人気お題TOP N
+app.get('/api/cards/popular', async (c) => {
+  const rawLimit = parseInt(c.req.query('limit') || '100');
+  const limit = Math.min(Number.isNaN(rawLimit) ? 100 : Math.max(1, rawLimit), 200);
+  const { results } = await c.env.DB.prepare(
+    `SELECT c.id, c.text, c.category, c.generated, COUNT(r.id) as times_selected
+     FROM rooms r
+     JOIN cards c ON r.result_card_id = c.id
+     WHERE r.result_card_id IS NOT NULL
+     GROUP BY r.result_card_id
+     ORDER BY times_selected DESC
+     LIMIT ?`
+  ).bind(limit).all<{ id: string; text: string; category: string; generated: number; times_selected: number }>();
+  const cards = (results || []).map(r => ({
+    id: r.id,
+    text: r.text,
+    category: r.category,
+    generated: r.generated === 1,
+    timesSelected: r.times_selected,
+  }));
+  return c.json({ cards, count: cards.length });
+});
+
 // お題総数
 app.get('/api/cards/count', async (c) => {
   const { results } = await c.env.DB.prepare(`SELECT COUNT(*) as total FROM cards WHERE ${ACTIVE_FILTER}`).all<{ total: number }>();
