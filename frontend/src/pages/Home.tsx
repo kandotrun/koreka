@@ -120,16 +120,34 @@ export default function Home() {
         animate={{ opacity: 1, y: 0 }}
         style={{ textAlign: 'center' }}
       >
-        <h1 style={{
-          fontSize: 48,
-          fontWeight: 900,
-          color: 'var(--accent)',
-          letterSpacing: '-0.02em',
+        <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 2 }}>
+          <h1 style={{
+            fontSize: 52,
+            fontWeight: 900,
+            background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            letterSpacing: '-0.02em',
+            lineHeight: 1,
+          }}>
+            これか
+          </h1>
+          <span style={{
+            fontSize: 52,
+            fontWeight: 900,
+            color: 'var(--primary)',
+            lineHeight: 1,
+          }}>!</span>
+        </div>
+        <p style={{
+          color: 'var(--text-sub)',
+          marginTop: 6,
+          fontSize: 11,
+          letterSpacing: '0.15em',
+          textTransform: 'uppercase',
         }}>
-          Koreka
-        </h1>
-        <p style={{ color: 'var(--text-sub)', marginTop: 8, fontSize: 14 }}>
-          みんなの「次どうする？」が決まるゲーム
+          Koreka — みんなの「次どうする？」が決まるゲーム
         </p>
       </motion.div>
 
