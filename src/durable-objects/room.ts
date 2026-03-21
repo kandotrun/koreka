@@ -145,10 +145,15 @@ export class RoomDurableObject implements DurableObject {
     }
 
     if (url.pathname === '/init') {
+      // /init は内部呼び出し専用（Workers runtime の fetch() 経由のみ）
+      // Cloudflare DOはpublicにfetchできないので実質認証済み
       const body = await request.json() as { code: string; cards: Card[]; cardsPerPlayer?: number };
+      if (!body.code || !Array.isArray(body.cards) || body.cards.length === 0) {
+        return new Response(JSON.stringify({ error: 'invalid_init' }), { status: 400 });
+      }
       this.room.code = body.code;
       this.room.deck = body.cards;
-      if (body.cardsPerPlayer) {
+      if (body.cardsPerPlayer && body.cardsPerPlayer > 0 && body.cardsPerPlayer <= 50) {
         this.room.cardsPerPlayer = body.cardsPerPlayer;
       }
       await this.persist();
@@ -215,7 +220,10 @@ export class RoomDurableObject implements DurableObject {
     this.removePlayer(ws);
   }
 
-  private async handleJoin(ws: WebSocket, name: string, existingId?: string) {
+  private async handleJoin(ws: WebSocket, rawName: string, existingId?: string) {
+    // 名前サニタイズ: 空白トリム、長さ制限、制御文字除去
+    const name = rawName.replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, 20) || 'ゲスト';
+
     // 再接続: 既存のplayerIdがあればWSだけ差し替え
     if (existingId && this.room.players.has(existingId)) {
       const player = this.room.players.get(existingId)!;
@@ -324,8 +332,12 @@ export class RoomDurableObject implements DurableObject {
     this.room.phase = 'dealing';
     this.room.round = 1;
 
-    // Shuffle deck
-    const shuffled = [...this.room.deck].sort(() => Math.random() - 0.5);
+    // Fisher-Yates shuffle（均一な分布）
+    const shuffled = [...this.room.deck];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     const playerCount = this.room.players.size;
     const totalCards = Math.min(shuffled.length, playerCount * this.room.cardsPerPlayer);
     const cardsToUse = shuffled.slice(0, totalCards);

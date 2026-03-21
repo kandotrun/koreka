@@ -12,10 +12,14 @@ function generateCode(): string {
 // POST /api/rooms - Create a new room
 rooms.post('/', async (c) => {
   const body = await c.req.json<CreateRoomRequest>();
+  if (!body.hostName || typeof body.hostName !== 'string') {
+    return c.json({ error: 'hostName required' }, 400);
+  }
   const code = generateCode();
 
   // Fetch cards from D1
-  const categories = body.settings?.categories;
+  const validCategories = ['adventure', 'chill', 'food', 'night', 'creative', 'random', 'spicy', 'trending', 'seasonal'];
+  const categories = body.settings?.categories?.filter(c => validCategories.includes(c));
   let query = 'SELECT id, text, category, generated FROM cards';
   const params: string[] = [];
 
