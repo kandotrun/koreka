@@ -1,6 +1,11 @@
 import type { Card, PlayerInfo, RoomPhase, ServerMessage, ClientMessage, RoomPublicState } from '../types';
 import type { Env } from '../env';
 
+// タイムアウト定数（インメモリタイマーとStorage+alarmの両方で使う締切の長さ）
+const SELECTION_TIMEOUT_MS = 30_000;
+const VOTE_TIMEOUT_MS = 30_000;
+const DISCONNECT_GRACE_MS = 30_000;
+
 interface PlayerState {
   id: string;
   name: string;
@@ -33,6 +38,7 @@ interface PersistentRoomData {
   cardsPerPlayer: number;
   hands: Record<string, Card[]>;
   votes: Record<string, string>;
+  result: Card | null;
 }
 
 // WebSocket attachmentに保存するプレイヤーデータ
@@ -49,6 +55,7 @@ export class RoomDurableObject implements DurableObject {
   private room: InternalRoomState;
   private initialized = false;
   private selectionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private voteTimer: ReturnType<typeof setTimeout> | null = null;
   private originalDeck: Card[] = [];
 
   constructor(state: DurableObjectState, env: Env) {
@@ -89,6 +96,7 @@ export class RoomDurableObject implements DurableObject {
       this.room.survivors = saved.survivors || [];
       this.room.hands = new Map(Object.entries(saved.hands || {}));
       this.room.votes = new Map(Object.entries(saved.votes || {}));
+      this.room.result = saved.result ?? null;
     }
 
     // 2. WebSocket attachmentsからプレイヤーを復元
@@ -122,6 +130,7 @@ export class RoomDurableObject implements DurableObject {
       cardsPerPlayer: this.room.cardsPerPlayer,
       hands: Object.fromEntries(this.room.hands),
       votes: Object.fromEntries(this.room.votes),
+      result: this.room.result,
     };
     await this.state.storage.put('room', data);
   }
@@ -167,7 +176,7 @@ export class RoomDurableObject implements DurableObject {
       // Set TTL alarm for auto-cleanup after 2 hours
       const ttlAt = Date.now() + 2 * 60 * 60 * 1000;
       await this.state.storage.put('ttlAt', ttlAt);
-      await this.state.storage.setAlarm(ttlAt);
+      await this.rearmAlarm();
       return new Response(JSON.stringify({ ok: true }));
     }
 
@@ -229,12 +238,12 @@ export class RoomDurableObject implements DurableObject {
 
   async webSocketClose(ws: WebSocket) {
     await this.restore();
-    this.removePlayer(ws);
+    await this.removePlayer(ws);
   }
 
   async webSocketError(ws: WebSocket) {
     await this.restore();
-    this.removePlayer(ws);
+    await this.removePlayer(ws);
   }
 
   private async handleJoin(ws: WebSocket, rawName: string, existingId?: string) {
@@ -267,7 +276,15 @@ export class RoomDurableObject implements DurableObject {
           this.send(ws, { type: 'deal', cards: hand, round: this.room.round });
         }
       } else if (this.room.phase === 'voting') {
-        this.send(ws, { type: 'final_vote', cards: this.room.survivors });
+        // 投票済みかどうかも伝える（リロード後の二重投票・迷子を防ぐ）
+        this.send(ws, { type: 'final_vote', cards: this.room.survivors, voted: this.room.votes.has(existingId) });
+      } else if (this.room.phase === 'result' && this.room.result) {
+        // 結果画面のリロード復元用に結果を再送する
+        const votes: Record<string, string> = {};
+        for (const [playerId, cardId] of this.room.votes) {
+          votes[playerId] = cardId;
+        }
+        this.send(ws, { type: 'result', card: this.room.result, votes });
       }
 
       this.broadcastPlayers();
@@ -383,7 +400,7 @@ export class RoomDurableObject implements DurableObject {
         this.send(player.ws, { type: 'deal', cards: hand, round: this.room.round });
       }
     }
-    this.startSelectionTimers();
+    await this.startSelectionTimers();
     await this.persist();
   }
 
@@ -411,14 +428,9 @@ export class RoomDurableObject implements DurableObject {
     this.saveAttachment(player);
     this.clearSelectionTimer(player.id);
 
-    // Check if all players have selected
-    const allSelected = [...this.room.players.values()].every(p => p.selectedCards.length > 0);
-
-    if (!allSelected) {
-      const pending = [...this.room.players.values()]
-        .filter(p => p.selectedCards.length === 0)
-        .map(p => p.name);
-      this.broadcast({ type: 'waiting', pending });
+    // Check if all players have finished (selected, or have no cards in hand)
+    if (!this.allPlayersDone()) {
+      this.broadcast({ type: 'waiting', pending: this.pendingSelectionNames() });
       return;
     }
 
@@ -428,6 +440,7 @@ export class RoomDurableObject implements DurableObject {
 
   private async passCards() {
     this.room.phase = 'passing';
+    await this.state.storage.delete('selectDeadlineAt');
     const playerIds = [...this.room.players.keys()];
     const playerCount = playerIds.length;
 
@@ -471,7 +484,7 @@ export class RoomDurableObject implements DurableObject {
       }
     }
 
-    this.startSelectionTimers();
+    await this.startSelectionTimers();
     this.broadcast({ type: 'round_complete', remaining: totalRemaining, round: this.room.round });
     await this.persist();
   }
@@ -499,6 +512,11 @@ export class RoomDurableObject implements DurableObject {
     }
 
     this.broadcast({ type: 'final_vote', cards: allCards });
+
+    // 投票の締切（30秒）をインメモリタイマーとstorage+alarmの両方で管理する
+    this.startVoteTimer();
+    await this.state.storage.put('voteDeadlineAt', Date.now() + VOTE_TIMEOUT_MS);
+    await this.rearmAlarm();
     await this.persist();
   }
 
@@ -526,11 +544,16 @@ export class RoomDurableObject implements DurableObject {
         .filter(p => !this.room.votes.has(p.id))
         .map(p => p.name);
       this.broadcast({ type: 'waiting', pending });
+      // 再起動時に票が失われないよう即永続化する
+      await this.persist();
     }
   }
 
   private async resolveResult() {
     this.room.phase = 'result';
+    this.clearVoteTimer();
+    await this.state.storage.delete('voteDeadlineAt');
+    await this.rearmAlarm();
 
     const voteCounts = new Map<string, number>();
     for (const cardId of this.room.votes.values()) {
@@ -571,16 +594,26 @@ export class RoomDurableObject implements DurableObject {
     }
   }
 
-  private startSelectionTimers() {
+  private async startSelectionTimers() {
     this.clearAllSelectionTimers();
+    let hasPending = false;
     for (const [playerId, player] of this.room.players) {
-      if (player.selectedCards.length === 0) {
-        const timer = setTimeout(() => {
-          this.handleSelectionTimeout(playerId);
-        }, 30_000);
-        this.selectionTimers.set(playerId, timer);
-      }
+      if (player.selectedCards.length > 0) continue;
+      const hand = this.room.hands.get(playerId);
+      if (!hand || hand.length === 0) continue; // 手札なしのプレイヤーは完了扱い
+      const timer = setTimeout(() => {
+        this.handleSelectionTimeout(playerId);
+      }, SELECTION_TIMEOUT_MS);
+      this.selectionTimers.set(playerId, timer);
+      hasPending = true;
     }
+    // ハイバネーション/再起動対策: 締切をStorageに永続化し、alarmで再開できるようにする
+    if (hasPending) {
+      await this.state.storage.put('selectDeadlineAt', Date.now() + SELECTION_TIMEOUT_MS);
+    } else {
+      await this.state.storage.delete('selectDeadlineAt');
+    }
+    await this.rearmAlarm();
   }
 
   private clearSelectionTimer(playerId: string) {
@@ -607,7 +640,18 @@ export class RoomDurableObject implements DurableObject {
     const hand = this.room.hands.get(playerId);
     if (!hand || hand.length === 0) return;
 
-    // Auto-select random half (keep half, discard half), minimum 1 kept
+    this.autoSelectPlayer(player, hand);
+
+    if (this.allPlayersDone()) {
+      this.clearAllSelectionTimers();
+      await this.passCards();
+    } else {
+      this.broadcast({ type: 'waiting', pending: this.pendingSelectionNames() });
+    }
+  }
+
+  /** 手札からランダムに半分（最低1枚）を自動キープする */
+  private autoSelectPlayer(player: PlayerState, hand: Card[]) {
     const shuffled = [...hand];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -621,18 +665,77 @@ export class RoomDurableObject implements DurableObject {
 
     // Notify the timed-out player
     this.send(player.ws, { type: 'error', message: 'selection_timeout' });
+  }
 
-    // Check if all players have selected
-    const allSelected = [...this.room.players.values()].every(p => p.selectedCards.length > 0);
-    if (allSelected) {
+  private clearVoteTimer() {
+    if (this.voteTimer) {
+      clearTimeout(this.voteTimer);
+      this.voteTimer = null;
+    }
+  }
+
+  private startVoteTimer() {
+    this.clearVoteTimer();
+    this.voteTimer = setTimeout(() => {
+      void this.processVoteDeadline();
+    }, VOTE_TIMEOUT_MS);
+  }
+
+  /** 完了扱いのプレイヤーか（選択済み、または手札がない） */
+  private isPlayerDone(player: PlayerState): boolean {
+    if (player.selectedCards.length > 0) return true;
+    const hand = this.room.hands.get(player.id);
+    return !hand || hand.length === 0;
+  }
+
+  private allPlayersDone(): boolean {
+    for (const player of this.room.players.values()) {
+      if (!this.isPlayerDone(player)) return false;
+    }
+    return true;
+  }
+
+  private pendingSelectionNames(): string[] {
+    return [...this.room.players.values()]
+      .filter(p => !this.isPlayerDone(p))
+      .map(p => p.name);
+  }
+
+  /** 選択締切（alarm経由）: 未選択プレイヤーを自動選択して進行させる。再起動/ハイバネーション後でもここから再開できる */
+  private async processSelectionDeadline() {
+    await this.state.storage.delete('selectDeadlineAt');
+    if (this.room.phase !== 'selecting') return;
+
+    for (const player of this.room.players.values()) {
+      if (this.isPlayerDone(player)) continue;
+      const hand = this.room.hands.get(player.id) ?? [];
+      if (hand.length === 0) continue;
+      this.autoSelectPlayer(player, hand);
+    }
+
+    if (this.allPlayersDone()) {
       this.clearAllSelectionTimers();
       await this.passCards();
     } else {
-      const pending = [...this.room.players.values()]
-        .filter(p => p.selectedCards.length === 0)
-        .map(p => p.name);
-      this.broadcast({ type: 'waiting', pending });
+      this.broadcast({ type: 'waiting', pending: this.pendingSelectionNames() });
     }
+  }
+
+  /** 投票締切: 未投票プレイヤーを自動投票して結果を確定する */
+  private async processVoteDeadline() {
+    this.clearVoteTimer();
+    await this.state.storage.delete('voteDeadlineAt');
+    if (this.room.phase !== 'voting') return;
+
+    for (const player of this.room.players.values()) {
+      if (this.room.votes.has(player.id)) continue;
+      const pick = this.room.survivors[Math.floor(Math.random() * this.room.survivors.length)];
+      if (!pick) continue;
+      this.room.votes.set(player.id, pick.id);
+      this.send(player.ws, { type: 'error', message: 'vote_timeout' });
+    }
+
+    await this.resolveResult();
   }
 
   private async handleRestart(ws: WebSocket) {
@@ -645,6 +748,10 @@ export class RoomDurableObject implements DurableObject {
     }
 
     this.clearAllSelectionTimers();
+    this.clearVoteTimer();
+    await this.state.storage.delete('selectDeadlineAt');
+    await this.state.storage.delete('voteDeadlineAt');
+    await this.rearmAlarm();
 
     // Reset room state
     this.room.phase = 'waiting';
@@ -689,10 +796,30 @@ export class RoomDurableObject implements DurableObject {
     // Remove from room
     this.room.players.delete(targetPlayerId);
     this.room.hands.delete(targetPlayerId);
+    this.room.votes.delete(targetPlayerId);
     this.clearSelectionTimer(targetPlayerId);
 
     await this.persist();
     this.broadcastPlayers();
+
+    // 進行再評価: 最後の未選択/未投票プレイヤーをキックした場合にゲームを進める
+    if (this.room.players.size > 0 && this.room.phase === 'selecting') {
+      if (this.allPlayersDone()) {
+        this.clearAllSelectionTimers();
+        await this.passCards();
+      } else {
+        this.broadcast({ type: 'waiting', pending: this.pendingSelectionNames() });
+      }
+    } else if (this.room.players.size > 0 && this.room.phase === 'voting') {
+      if (this.room.votes.size >= this.room.players.size) {
+        await this.resolveResult();
+      } else {
+        const pending = [...this.room.players.values()]
+          .filter(p => !this.room.votes.has(p.id))
+          .map(p => p.name);
+        this.broadcast({ type: 'waiting', pending });
+      }
+    }
   }
 
   private findPlayer(ws: WebSocket): PlayerState | undefined {
@@ -702,15 +829,16 @@ export class RoomDurableObject implements DurableObject {
     return undefined;
   }
 
-  private removePlayer(ws: WebSocket) {
+  private async removePlayer(ws: WebSocket) {
     const player = this.findPlayer(ws);
     if (!player) return;
 
     player.ws = null;
 
-    // waitingフェーズなら30秒後に削除
+    // waitingフェーズなら30秒後に削除（alarmで実行、再起動でも失われない）
     if (this.room.phase === 'waiting') {
-      this.state.storage.setAlarm(Date.now() + 30_000).catch(() => {});
+      await this.state.storage.put('disconnectCleanupAt', Date.now() + DISCONNECT_GRACE_MS);
+      await this.rearmAlarm();
     }
 
     this.broadcastPlayers();
@@ -718,10 +846,11 @@ export class RoomDurableObject implements DurableObject {
 
   async alarm() {
     await this.restore();
+    const now = Date.now();
 
     // TTL auto-cleanup: close all connections and delete storage
     const ttlAt = await this.state.storage.get<number>('ttlAt');
-    if (ttlAt && Date.now() >= ttlAt) {
+    if (ttlAt && now >= ttlAt) {
       for (const ws of this.state.getWebSockets()) {
         try { ws.close(1000, 'room_expired'); } catch {}
       }
@@ -729,9 +858,43 @@ export class RoomDurableObject implements DurableObject {
       return;
     }
 
-    // Player disconnect cleanup (waiting phase only)
-    if (this.room.phase !== 'waiting') return;
+    // 選択締切: 未選択プレイヤーの自動選択（ハイバネーション復帰時にもここから再開）
+    const selectDeadlineAt = await this.state.storage.get<number>('selectDeadlineAt');
+    if (selectDeadlineAt && now >= selectDeadlineAt) {
+      await this.processSelectionDeadline();
+    }
 
+    // 投票締切: 未投票プレイヤーの自動投票
+    const voteDeadlineAt = await this.state.storage.get<number>('voteDeadlineAt');
+    if (voteDeadlineAt && now >= voteDeadlineAt) {
+      await this.processVoteDeadline();
+    }
+
+    // Player disconnect cleanup (waiting phase only)
+    const disconnectCleanupAt = await this.state.storage.get<number>('disconnectCleanupAt');
+    if (disconnectCleanupAt) {
+      await this.state.storage.delete('disconnectCleanupAt');
+      if (this.room.phase === 'waiting') {
+        await this.cleanupDisconnectedPlayers();
+      }
+    }
+
+    // 残りの締切（TTLなど）でalarmを再設定する
+    await this.rearmAlarm();
+  }
+
+  /** 登録されている全締切（TTL/選択/投票/切断クリーンアップ）の最小時刻でalarmを再設定する */
+  private async rearmAlarm() {
+    const keys = ['ttlAt', 'selectDeadlineAt', 'voteDeadlineAt', 'disconnectCleanupAt'] as const;
+    const times = (await Promise.all(keys.map(key => this.state.storage.get<number>(key))))
+      .filter((t): t is number => typeof t === 'number');
+    if (times.length > 0) {
+      await this.state.storage.setAlarm(Math.min(...times));
+    }
+  }
+
+  /** waitingフェーズで切断したままのプレイヤーを削除する */
+  private async cleanupDisconnectedPlayers() {
     const toRemove: string[] = [];
     for (const [id, player] of this.room.players) {
       if (player.ws === null) {
@@ -742,6 +905,7 @@ export class RoomDurableObject implements DurableObject {
     for (const id of toRemove) {
       this.room.players.delete(id);
       this.room.hands.delete(id);
+      this.room.votes.delete(id);
     }
 
     if (this.room.players.size > 0) {
@@ -753,11 +917,6 @@ export class RoomDurableObject implements DurableObject {
       }
       await this.persist();
       this.broadcastPlayers();
-    }
-
-    // Re-set TTL alarm after player cleanup
-    if (ttlAt && ttlAt > Date.now()) {
-      await this.state.storage.setAlarm(ttlAt);
     }
   }
 

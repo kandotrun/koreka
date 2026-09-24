@@ -47,7 +47,7 @@ export type ServerMessage =
   | { type: 'pass'; cards: Card[]; round: number }
   | { type: 'waiting'; pending: string[] }
   | { type: 'round_complete'; remaining: number; round: number }
-  | { type: 'final_vote'; cards: Card[] }
+  | { type: 'final_vote'; cards: Card[]; voted?: boolean }
   | { type: 'result'; card: Card; votes: Record<string, string> }
   | { type: 'restart' }
   | { type: 'error'; message: string }
