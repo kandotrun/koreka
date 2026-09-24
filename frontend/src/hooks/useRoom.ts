@@ -12,6 +12,7 @@ interface RoomState {
   pending: string[];
   survivors: Card[];
   result: { card: Card; votes: Record<string, string> } | null;
+  voted: boolean;
   error: string | null;
 }
 
@@ -28,11 +29,16 @@ export function useRoom(code: string | undefined) {
     pending: [],
     survivors: [],
     result: null,
+    voted: false,
     error: null,
   });
 
   // 接続時に自動joinするための名前を保持
   const autoJoinNameRef = useRef<string | null>(null);
+  // 致命的エラー（部屋なし/満員/キック等）では再接続しない
+  const fatalRef = useRef(false);
+  // 再接続タイマー（unmount時にクリアしてゾンビ再接続を防ぐ）
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback((autoJoinName?: string) => {
     if (!code || wsRef.current) return;
@@ -43,6 +49,7 @@ export function useRoom(code: string | undefined) {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return; // 古い接続は無視
       setState(s => ({ ...s, connected: true }));
       // 接続完了時に自動joinする（race condition防止）
       if (autoJoinNameRef.current) {
@@ -55,22 +62,25 @@ export function useRoom(code: string | undefined) {
     };
 
     ws.onclose = () => {
+      // 古い接続のイベントは無視（unmount後・再接続後の二重処理を防ぐ）
+      if (wsRef.current !== ws) return;
       wsRef.current = null;
-      setState(s => {
-        // エラーで切断された場合は再接続しない
-        if (s.error) return { ...s, connected: false };
-        // 自動再接続（デプロイ後の断線復帰用）
-        const savedName = window.sessionStorage.getItem('playerName') || 'ゲスト';
-        setTimeout(() => {
-          if (!wsRef.current) {
-            connect(savedName);
-          }
-        }, 2000);
-        return { ...s, connected: false };
-      });
+      setState(s => ({ ...s, connected: false }));
+
+      // 致命的エラー（部屋なし/満員/キック）では再接続しない
+      if (fatalRef.current) return;
+
+      // 自動再接続（デプロイ・一時断線からの復帰。タイムアウト等の非致命的エラーは復帰させる）
+      const savedName = window.sessionStorage.getItem('playerName') || 'ゲスト';
+      reconnectTimerRef.current = setTimeout(() => {
+        if (!wsRef.current) {
+          connect(savedName);
+        }
+      }, 2000);
     };
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws) return; // 古い接続は無視
       const msg: ServerMessage = JSON.parse(event.data);
 
       switch (msg.type) {
@@ -89,10 +99,10 @@ export function useRoom(code: string | undefined) {
           setState(s => ({ ...s, players: msg.players }));
           break;
         case 'deal':
-          setState(s => ({ ...s, phase: 'selecting', cards: msg.cards, round: msg.round, pending: [] }));
+          setState(s => ({ ...s, phase: 'selecting', cards: msg.cards, round: msg.round, pending: [], voted: false }));
           break;
         case 'pass':
-          setState(s => ({ ...s, phase: 'selecting', cards: msg.cards, round: msg.round, pending: [] }));
+          setState(s => ({ ...s, phase: 'selecting', cards: msg.cards, round: msg.round, pending: [], voted: false }));
           break;
         case 'waiting':
           setState(s => ({ ...s, pending: msg.pending }));
@@ -101,7 +111,8 @@ export function useRoom(code: string | undefined) {
           setState(s => ({ ...s, round: msg.round }));
           break;
         case 'final_vote':
-          setState(s => ({ ...s, phase: 'voting', survivors: msg.cards, pending: [] }));
+          // voted: 再接続時に「投票済みか」を受け取る（リロード後の二重投票防止）
+          setState(s => ({ ...s, phase: 'voting', survivors: msg.cards, pending: [], voted: msg.voted ?? false }));
           break;
         case 'result':
           setState(s => ({
@@ -119,6 +130,7 @@ export function useRoom(code: string | undefined) {
             pending: [],
             survivors: [],
             result: null,
+            voted: false,
             error: null,
           }));
           break;
@@ -126,22 +138,30 @@ export function useRoom(code: string | undefined) {
           console.error('Room error:', msg.message);
           // 致命的エラー（参加不可）
           if (msg.message === 'room_not_found') {
+            fatalRef.current = true;
             setState(s => ({ ...s, error: 'room_not_found' }));
             ws.close();
             break;
           }
           if (msg.message === 'room_full' || msg.message === 'game_in_progress') {
+            fatalRef.current = true;
             setState(s => ({ ...s, error: msg.message }));
             ws.close();
             break;
           }
           if (msg.message === 'kicked') {
+            fatalRef.current = true;
             setState(s => ({ ...s, error: 'kicked' }));
             ws.close();
             break;
           }
           if (msg.message === 'selection_timeout') {
             setState(s => ({ ...s, error: 'selection_timeout' }));
+            break;
+          }
+          if (msg.message === 'vote_timeout') {
+            // 投票タイムアウトで自動投票された — 待機状態にする（この直後にresultが届く）
+            setState(s => ({ ...s, voted: true, pending: [] }));
             break;
           }
           if (msg.message === 'invalid_selection') {
@@ -152,33 +172,51 @@ export function useRoom(code: string | undefined) {
               }
               // voting: 投票状態リセットして再投票可能に
               if (s.phase === 'voting') {
-                return { ...s, survivors: [...s.survivors], pending: [] };
+                return { ...s, survivors: [...s.survivors], pending: [], voted: false };
               }
               return s;
             });
           }
           if (msg.message === 'already_voted') {
-            // 二重投票 — 待機状態に戻す（他のプレイヤー待ち）
-            setState(s => ({ ...s, pending: [] }));
+            // 二重投票 — 投票済み扱いにして待機状態へ（他のプレイヤー待ち）
+            setState(s => ({ ...s, pending: [], voted: true }));
           }
           break;
       }
     };
   }, [code]);
 
-  const sendMessage = useCallback((msg: ClientMessage) => {
+  const sendMessage = useCallback((msg: ClientMessage): boolean => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
+      return true;
     }
+    return false;
   }, []);
 
   const join = useCallback((name: string) => sendMessage({ type: 'join', name }), [sendMessage]);
   const ready = useCallback(() => sendMessage({ type: 'ready' }), [sendMessage]);
   const start = useCallback(() => sendMessage({ type: 'start' }), [sendMessage]);
   const select = useCallback((cardIds: string[]) => sendMessage({ type: 'select', cardIds }), [sendMessage]);
-  const vote = useCallback((cardId: string) => sendMessage({ type: 'vote', cardId }), [sendMessage]);
+  const vote = useCallback((cardId: string) => {
+    // 送信できたときだけ楽観的に投票済みにする（切断中の無言の票ロストを防ぐ）
+    if (sendMessage({ type: 'vote', cardId })) {
+      setState(s => ({ ...s, voted: true }));
+    }
+  }, [sendMessage]);
   const restart = useCallback(() => sendMessage({ type: 'restart' }), [sendMessage]);
   const kick = useCallback((playerId: string) => sendMessage({ type: 'kick', playerId }), [sendMessage]);
+
+  // 部屋(code)が変わったら致命的エラー記憶をリセットし、古い接続を確実に落とす
+  useEffect(() => {
+    fatalRef.current = false;
+    setState(s => ({ ...s, error: null }));
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [code]);
 
   useEffect(() => {
     if (!code || wsRef.current) return;
@@ -199,9 +237,10 @@ export function useRoom(code: string | undefined) {
     return () => clearInterval(interval);
   }, []);
 
-  // Cleanup on unmount
+  // Cleanup on unmount（ゾンビ再接続を防ぐ）
   useEffect(() => {
     return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       wsRef.current?.close();
       wsRef.current = null;
     };

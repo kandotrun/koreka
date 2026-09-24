@@ -300,4 +300,76 @@ describe('Reconnection', () => {
     const playersMsg = getSent(ws2).find(m => m.type === 'players');
     expect(playersMsg).toBeDefined();
   });
+
+  it('resultフェーズ中の再接続で結果が再送される', async () => {
+    await initRoom(room, '1234', makeCards(10));
+    const ws1 = new MockWebSocket();
+    const ws2 = new MockWebSocket();
+    await sendMsg(room, ws1, { type: 'join', name: 'Alice' });
+    await sendMsg(room, ws2, { type: 'join', name: 'Bob' });
+    const aliceId = (getSent(ws1).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>).playerId;
+
+    await sendMsg(room, ws2, { type: 'ready' });
+    await sendMsg(room, ws1, { type: 'start' });
+
+    const deal1 = getSent(ws1).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+    const deal2 = getSent(ws2).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+    await sendMsg(room, ws1, { type: 'select', cardIds: [deal1.cards[0].id] });
+    await sendMsg(room, ws2, { type: 'select', cardIds: [deal2.cards[0].id] });
+
+    const fv = getSent(ws1).find(m => m.type === 'final_vote') as Extract<ServerMessage, { type: 'final_vote' }>;
+    await sendMsg(room, ws1, { type: 'vote', cardId: fv.cards[0].id });
+    await sendMsg(room, ws2, { type: 'vote', cardId: fv.cards[0].id });
+
+    const result = getSent(ws1).find(m => m.type === 'result') as Extract<ServerMessage, { type: 'result' }>;
+    expect(result).toBeDefined();
+
+    // Aliceが切断 → 再接続
+    await room.webSocketClose(ws1 as unknown as WebSocket);
+    const ws3 = new MockWebSocket();
+    await sendMsg(room, ws3, { type: 'join', name: 'Alice', playerId: aliceId });
+
+    // resultが再送され、リロード後も結果画面を復元できる
+    const resent = getSent(ws3).find(m => m.type === 'result') as Extract<ServerMessage, { type: 'result' }>;
+    expect(resent).toBeDefined();
+    expect(resent.card.id).toBe(result.card.id);
+    expect(resent.votes).toEqual(result.votes);
+  });
+
+  it('voting中に投票済みで再接続するとvoted:trueが、未投票ならvoted:falseが届く', async () => {
+    await initRoom(room, '1234', makeCards(10));
+    const ws1 = new MockWebSocket();
+    const ws2 = new MockWebSocket();
+    await sendMsg(room, ws1, { type: 'join', name: 'Alice' });
+    await sendMsg(room, ws2, { type: 'join', name: 'Bob' });
+    const aliceId = (getSent(ws1).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>).playerId;
+    const bobId = (getSent(ws2).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>).playerId;
+
+    await sendMsg(room, ws2, { type: 'ready' });
+    await sendMsg(room, ws1, { type: 'start' });
+
+    const deal1 = getSent(ws1).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+    const deal2 = getSent(ws2).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+    await sendMsg(room, ws1, { type: 'select', cardIds: [deal1.cards[0].id] });
+    await sendMsg(room, ws2, { type: 'select', cardIds: [deal2.cards[0].id] });
+    const fv = getSent(ws1).find(m => m.type === 'final_vote') as Extract<ServerMessage, { type: 'final_vote' }>;
+
+    // Aliceだけ投票
+    await sendMsg(room, ws1, { type: 'vote', cardId: fv.cards[0].id });
+
+    // 両者切断 → 再接続
+    await room.webSocketClose(ws1 as unknown as WebSocket);
+    await room.webSocketClose(ws2 as unknown as WebSocket);
+    const ws3 = new MockWebSocket();
+    const ws4 = new MockWebSocket();
+    await sendMsg(room, ws3, { type: 'join', name: 'Alice', playerId: aliceId });
+    await sendMsg(room, ws4, { type: 'join', name: 'Bob', playerId: bobId });
+
+    const fvAlice = getSent(ws3).find(m => m.type === 'final_vote') as Extract<ServerMessage, { type: 'final_vote' }>;
+    const fvBob = getSent(ws4).find(m => m.type === 'final_vote') as Extract<ServerMessage, { type: 'final_vote' }>;
+    expect(fvAlice).toBeDefined();
+    expect(fvBob).toBeDefined();
+    expect(fvAlice.voted).toBe(true);
+    expect(fvBob.voted).toBe(false);
+  });
 });

@@ -86,6 +86,11 @@ class MockPreparedStatement {
     return { results: [] as T[] };
   }
 
+  async first<T>() {
+    // ルームコード衝突チェック（SELECT id FROM rooms WHERE code）: このモックでは常に空き
+    return null as T | null;
+  }
+
   async run() {
     this.inserts.push({ query: this.query, params: this.params });
     return { success: true };

@@ -15,8 +15,6 @@ rooms.post('/', async (c) => {
   if (!body.hostName || typeof body.hostName !== 'string') {
     return c.json({ error: 'hostName required' }, 400);
   }
-  const code = generateCode();
-
   const cardsPerPlayer = body.settings?.cardsPerPlayer || 5;
   let cards: Card[];
 
@@ -61,28 +59,49 @@ rooms.post('/', async (c) => {
     }));
   }
 
-  // Create Durable Object
-  const roomId = c.env.ROOM.idFromName(code);
-  const roomObj = c.env.ROOM.get(roomId);
+  if (cards.length === 0) {
+    return c.json({ error: 'no_cards_available' }, 400);
+  }
 
-  // Initialize the room
-  await roomObj.fetch(new Request('http://internal/init', {
-    method: 'POST',
-    body: JSON.stringify({ code, cards, cardsPerPlayer }),
-  }));
+  // コード衝突時は別コードで再試行する（SELECT + UNIQUE制約の両方で防御）
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateCode();
 
-  // Save room to D1
-  await c.env.DB.prepare(
-    'INSERT INTO rooms (id, code, player_count, created_at) VALUES (?, ?, 0, datetime(\'now\'))'
-  ).bind(roomId.toString(), code).run();
+    const existing = await c.env.DB.prepare('SELECT id FROM rooms WHERE code = ?').bind(code).first<{ id: string }>();
+    if (existing) continue;
 
-  const response: CreateRoomResponse = {
-    roomId: roomId.toString(),
-    code,
-    wsUrl: `${c.req.url.replace('http', 'ws').replace('/api/rooms', '')}/api/rooms/${code}/ws`,
-  };
+    const roomId = c.env.ROOM.idFromName(code);
+    const roomObj = c.env.ROOM.get(roomId);
 
-  return c.json(response, 201);
+    // Initialize the room
+    const initRes = await roomObj.fetch(new Request('http://internal/init', {
+      method: 'POST',
+      body: JSON.stringify({ code, cards, cardsPerPlayer }),
+    }));
+    if (!initRes.ok) {
+      return c.json({ error: 'room_init_failed' }, 500);
+    }
+
+    // Save room to D1
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO rooms (id, code, player_count, created_at) VALUES (?, ?, 0, datetime(\'now\'))'
+      ).bind(roomId.toString(), code).run();
+    } catch {
+      // UNIQUE制約違反（同時作成の競合）→ 別コードで再試行
+      continue;
+    }
+
+    const response: CreateRoomResponse = {
+      roomId: roomId.toString(),
+      code,
+      wsUrl: `${c.req.url.replace('http', 'ws').replace('/api/rooms', '')}/api/rooms/${code}/ws`,
+    };
+
+    return c.json(response, 201);
+  }
+
+  return c.json({ error: 'room_creation_failed' }, 503);
 });
 
 // GET /api/rooms/:code - Get room info

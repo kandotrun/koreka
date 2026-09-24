@@ -212,6 +212,8 @@ input {
   height: 10px;
   top: -10px;
   animation: confetti-fall 3s ease-in-out forwards;
+  /* 装飾なのでクリックを遮らない（結果画面のボタン押下を妨げない） */
+  pointer-events: none;
 }
 
 /* Code input */

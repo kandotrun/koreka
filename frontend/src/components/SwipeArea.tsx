@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Card as CardType } from '../../../src/types';
 import Card from './Card';
 import { useSwipe } from '../hooks/useSwipe';
 import { sound } from '../lib/sound';
+import { useI18n } from '../contexts/I18nContext';
 
 const cardSpring = {
   type: 'spring' as const,
@@ -18,6 +19,7 @@ interface SwipeAreaProps {
 }
 
 export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
+  const { t } = useI18n();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [keptCards, setKeptCards] = useState<string[]>([]);
   const [exitX, setExitX] = useState(0);
@@ -26,8 +28,18 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
   const remaining = cards.length - currentIndex;
   const isLast = currentIndex === cards.length - 1;
 
+  // 連打・スワイプとボタンの二重発火でカードが飛ぶのを防ぐ
+  const lastActionRef = useRef(0);
+  const takeLock = useCallback(() => {
+    const now = Date.now();
+    if (now - lastActionRef.current < 250) return false;
+    lastActionRef.current = now;
+    return true;
+  }, []);
+
   const handleKeep = useCallback(() => {
     if (!currentCard) return;
+    if (!takeLock()) return;
 
     // 最後のカードで全部キープ済み → 強制パス（最低1枚捨てる必要あり）
     if (isLast && keptCards.length === cards.length - 1) {
@@ -47,10 +59,11 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentCard, keptCards, currentIndex, cards.length, isLast, onComplete]);
+  }, [currentCard, keptCards, currentIndex, cards.length, isLast, onComplete, takeLock]);
 
   const handleDiscard = useCallback(() => {
     if (!currentCard) return;
+    if (!takeLock()) return;
     sound.play('swipeDiscard');
     setExitX(-300);
 
@@ -70,13 +83,28 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
     } else {
       setCurrentIndex(i => i + 1);
     }
-  }, [currentCard, keptCards, currentIndex, cards.length, isLast, onComplete]);
+  }, [currentCard, keptCards, currentIndex, cards.length, isLast, onComplete, takeLock]);
 
   const { x, y, rotation, swiping, direction, bind } = useSwipe({
     threshold: 80,
     onSwipeRight: handleKeep,
     onSwipeLeft: handleDiscard,
   });
+
+  // キーボード操作（←: パス / →: やる）— PCでも迷わず選べるように
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleKeep();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleDiscard();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleKeep, handleDiscard]);
 
   if (!currentCard) return null;
 
@@ -140,7 +168,7 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
               zIndex: 10,
             }}
           >
-            やる!
+            {t('game.keep')}
           </motion.div>
         )}
         {direction === 'left' && (
@@ -161,7 +189,7 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
               zIndex: 10,
             }}
           >
-            パス
+            {t('game.pass')}
           </motion.div>
         )}
       </AnimatePresence>
@@ -223,19 +251,64 @@ export default function SwipeArea({ cards, onComplete }: SwipeAreaProps) {
         </AnimatePresence>
       </div>
 
+      {/* Action buttons（スワイプ以外にボタンでも選べる） */}
+      <div style={{ display: 'flex', gap: 16, marginTop: 24, width: 280 }}>
+        <button
+          type="button"
+          onClick={handleDiscard}
+          aria-label={t('game.pass')}
+          style={{
+            flex: 1,
+            height: 56,
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            color: 'var(--text-sub)',
+            fontSize: 18,
+            fontWeight: 700,
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+          }}
+        >
+          ✕ {t('game.pass')}
+        </button>
+        <button
+          type="button"
+          onClick={handleKeep}
+          aria-label={t('game.keep')}
+          style={{
+            flex: 1,
+            height: 56,
+            borderRadius: 'var(--radius-md)',
+            border: 'none',
+            background: 'var(--primary)',
+            color: 'white',
+            fontSize: 18,
+            fontWeight: 700,
+            cursor: 'pointer',
+            touchAction: 'manipulation',
+          }}
+        >
+          ✓ {t('game.keep')}
+        </button>
+      </div>
+
       {/* Hint text */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         width: 280,
-        marginTop: 24,
+        marginTop: 16,
         color: 'var(--text-sub)',
         fontSize: 14,
       }}>
-        <span>← やらない</span>
-        <span>残り {remaining}/{cards.length}</span>
-        <span>やる →</span>
+        <span>{t('game.hint_pass')}</span>
+        <span>{t('game.cards_left', remaining, cards.length)}</span>
+        <span>{t('game.hint_keep')}</span>
       </div>
+      <p style={{ marginTop: 6, color: 'var(--text-sub)', fontSize: 12, opacity: 0.8 }}>
+        {t('game.keyboard_hint')}
+      </p>
     </div>
   );
 }

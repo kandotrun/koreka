@@ -71,6 +71,7 @@ class MockPreparedStatement {
     private readonly inserts: Array<{ query: string; params: (string | number)[] }>,
     private readonly rooms: Array<{ id: string; code: string; result_card_id?: string }>,
     private readonly memories: Array<{ id: string; room_id: string; comment: string }>,
+    private readonly insertFailCodes: Set<string> = new Set(),
   ) {}
 
   bind(...params: (string | number)[]) {
@@ -115,6 +116,10 @@ class MockPreparedStatement {
   }
 
   async run() {
+    // 同時作成の競合を再現: 対象コードのINSERTはUNIQUE制約違反で失敗する
+    if (this.query.includes('INSERT INTO rooms') && this.insertFailCodes.has(this.params[1] as string)) {
+      throw new Error('UNIQUE constraint failed: rooms.code');
+    }
     this.inserts.push({ query: this.query, params: this.params });
     return { success: true, meta: { changes: 1 } };
   }
@@ -124,11 +129,12 @@ class MockD1Database {
   readonly inserts: Array<{ query: string; params: (string | number)[] }> = [];
   readonly rooms: Array<{ id: string; code: string; result_card_id?: string }> = [];
   readonly memories: Array<{ id: string; room_id: string; comment: string }> = [];
+  readonly insertFailCodes = new Set<string>();
 
   constructor(private readonly cards: Card[]) {}
 
   prepare(query: string) {
-    return new MockPreparedStatement(query, this.cards, this.inserts, this.rooms, this.memories);
+    return new MockPreparedStatement(query, this.cards, this.inserts, this.rooms, this.memories, this.insertFailCodes);
   }
 
   batch(stmts: MockPreparedStatement[]) {
@@ -254,6 +260,75 @@ describe('API endpoints', () => {
       expect(typeof body.code).toBe('string');
       expect(body.code).toMatch(/^\d{4}$/);
       expect(typeof body.roomId).toBe('string');
+    });
+
+    it('ルームコードが衝突したら別のコードで再試行する', async () => {
+      const env = makeEnv(db);
+      // 最初の乱数で生成される '5500' が既存ルームと衝突する状態を作る
+      db.rooms.push({ id: 'room-5500', code: '5500' });
+      const rand = vi.spyOn(Math, 'random');
+      rand.mockReturnValueOnce(0.5); // Math.floor(1000 + 0.5 * 9000) = 5500（衝突）
+      rand.mockReturnValue(0.25);    // Math.floor(1000 + 0.25 * 9000) = 3250（空き）
+
+      const res = await app.request('http://example.com/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostName: 'Host' }),
+      }, env);
+      rand.mockRestore();
+
+      expect(res.status).toBe(201);
+      const body = await res.json() as { code: string };
+      expect(body.code).not.toBe('5500');
+      expect(body.code).toMatch(/^\d{4}$/);
+    });
+
+    it('コード衝突が解消できない場合は503を返す（500にはしない）', async () => {
+      const env = makeEnv(db);
+      db.rooms.push({ id: 'room-5500', code: '5500' });
+      const rand = vi.spyOn(Math, 'random').mockReturnValue(0.5); // 常に5500で衝突
+
+      const res = await app.request('http://example.com/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostName: 'Host' }),
+      }, env);
+      rand.mockRestore();
+
+      expect(res.status).toBe(503);
+      const body = await res.json() as { error: string };
+      expect(body.error).toBe('room_creation_failed');
+    });
+
+    it('INSERT時にUNIQUE競合しても別コードで再試行する（同時作成の競合）', async () => {
+      const env = makeEnv(db);
+      const rand = vi.spyOn(Math, 'random');
+      rand.mockReturnValueOnce(0.5); // 5500 → INSERTでUNIQUE違反をシミュレート
+      rand.mockReturnValue(0.25);    // 3250 → 成功
+      db.insertFailCodes.add('5500');
+
+      const res = await app.request('http://example.com/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostName: 'Host' }),
+      }, env);
+      rand.mockRestore();
+
+      expect(res.status).toBe(201);
+      const body = await res.json() as { code: string };
+      expect(body.code).toBe('3250');
+    });
+
+    it('カードが1枚も用意できない場合は400を返す', async () => {
+      const env = makeEnv(db);
+      const res = await app.request('http://example.com/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostName: 'Host', settings: { customCards: ['   ', ''] } }),
+      }, env);
+      expect(res.status).toBe(400);
+      const body = await res.json() as { error: string };
+      expect(body.error).toBe('no_cards_available');
     });
   });
 

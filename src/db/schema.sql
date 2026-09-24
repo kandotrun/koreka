@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS cards (
   text TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'general',
   generated INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
