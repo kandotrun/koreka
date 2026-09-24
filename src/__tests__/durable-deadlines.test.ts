@@ -201,4 +201,46 @@ describe('Durable deadlines (storage + alarm による再起動耐久)', () => {
     expect(playersMsgs.length).toBeGreaterThan(0);
     expect(playersMsgs[playersMsgs.length - 1].players.length).toBe(1);
   });
+
+  it('WS切断後にDOがevictされても同じplayerIdで再接続できる（game_in_progressで詰まらない）', async () => {
+    const { ws1 } = await setupSelecting();
+    const aliceId = (getSent(ws1).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>).playerId;
+
+    // AliceのWSが落ちる（携帯スリープ等）→ 名簿上はws=nullで残る
+    ws1.readyState = 3;
+    await room.webSocketClose(ws1 as unknown as WebSocket);
+
+    // その後DOがevictされ、インメモリの状態を失った新インスタンスが復帰する
+    const restored = new RoomDurableObject(state, {});
+
+    // Aliceが同じplayerIdで再接続する
+    const ws1b = new MockWebSocket();
+    acceptedWs.push(ws1b);
+    await sendMsg(restored, ws1b, { type: 'join', name: 'Alice', playerId: aliceId });
+
+    const msgs = getSent(ws1b);
+    expect(msgs.find(m => m.type === 'error' && m.message === 'game_in_progress')).toBeUndefined();
+    expect(msgs.find(m => m.type === 'welcome')).toBeDefined();
+    // まだ未選択なので手札が再送され、続きから選べる
+    expect(msgs.find(m => m.type === 'deal')).toBeDefined();
+  });
+
+  it('選択済みプレイヤーが再接続してもdealは再送されない（選択の上書き防止）', async () => {
+    const { ws1 } = await setupSelecting();
+    const aliceId = (getSent(ws1).find(m => m.type === 'welcome') as Extract<ServerMessage, { type: 'welcome' }>).playerId;
+    const deal1 = getSent(ws1).find(m => m.type === 'deal') as Extract<ServerMessage, { type: 'deal' }>;
+    await sendMsg(room, ws1, { type: 'select', cardIds: [deal1.cards[0].id] });
+
+    // 切断 → evict → 再接続（選択状態はstorageから復元される）
+    ws1.readyState = 3;
+    await room.webSocketClose(ws1 as unknown as WebSocket);
+    const restored = new RoomDurableObject(state, {});
+    const ws1b = new MockWebSocket();
+    acceptedWs.push(ws1b);
+    await sendMsg(restored, ws1b, { type: 'join', name: 'Alice', playerId: aliceId });
+
+    const msgs = getSent(ws1b);
+    expect(msgs.find(m => m.type === 'welcome')).toBeDefined();
+    expect(msgs.find(m => m.type === 'deal')).toBeUndefined();
+  });
 });

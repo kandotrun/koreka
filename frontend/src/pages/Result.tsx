@@ -105,19 +105,20 @@ export default function Result() {
     }
   }, [code, result?.card?.id]);
 
-  // Navigate back to lobby on restart
+  // Navigate back to lobby on restart（接続確立前の初期phaseで誤爆しないようconnectedを待つ）
   useEffect(() => {
-    if (room.phase === 'waiting') {
+    if (room.connected && room.phase === 'waiting') {
       navigate(`/${code}`);
     }
-  }, [room.phase, code, navigate]);
+  }, [room.connected, room.phase, code, navigate]);
 
   // 結果がまだ無い場合（リロード直後など）は再接続での再送を待ち、届かなければロビーへ戻す
+  // （welcome受信後に部屋がresultフェーズのときだけ開始する）
   useEffect(() => {
-    if (result || room.error) return;
+    if (result || room.error || !room.connected || room.phase !== 'result') return;
     const timer = setTimeout(() => navigate(`/${code || ''}`), 2500);
     return () => clearTimeout(timer);
-  }, [result, room.error, code, navigate]);
+  }, [result, room.error, room.connected, room.phase, code, navigate]);
 
   if (!result) {
     return (

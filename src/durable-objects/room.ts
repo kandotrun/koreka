@@ -39,6 +39,15 @@ interface PersistentRoomData {
   hands: Record<string, Card[]>;
   votes: Record<string, string>;
   result: Card | null;
+  players: PersistentPlayer[];
+}
+
+// 永続化するプレイヤーデータ（wsは含めない。復帰時にattachmentから再リンクする）
+interface PersistentPlayer {
+  id: string;
+  name: string;
+  ready: boolean;
+  selectedCards: string[];
 }
 
 // WebSocket attachmentに保存するプレイヤーデータ
@@ -97,6 +106,16 @@ export class RoomDurableObject implements DurableObject {
       this.room.hands = new Map(Object.entries(saved.hands || {}));
       this.room.votes = new Map(Object.entries(saved.votes || {}));
       this.room.result = saved.result ?? null;
+      // 名簿も復元（eviction後も再接続できるように。生存WSは下のattachment側で再リンクされる）
+      for (const savedPlayer of saved.players || []) {
+        this.room.players.set(savedPlayer.id, {
+          id: savedPlayer.id,
+          name: savedPlayer.name,
+          ready: savedPlayer.ready,
+          ws: null,
+          selectedCards: savedPlayer.selectedCards || [],
+        });
+      }
     }
 
     // 2. WebSocket attachmentsからプレイヤーを復元
@@ -131,6 +150,12 @@ export class RoomDurableObject implements DurableObject {
       hands: Object.fromEntries(this.room.hands),
       votes: Object.fromEntries(this.room.votes),
       result: this.room.result,
+      players: [...this.room.players.values()].map(pl => ({
+        id: pl.id,
+        name: pl.name,
+        ready: pl.ready,
+        selectedCards: pl.selectedCards,
+      })),
     };
     await this.state.storage.put('room', data);
   }
@@ -269,11 +294,13 @@ export class RoomDurableObject implements DurableObject {
         roomState: this.getPublicState(),
       });
 
-      // ゲーム中なら手札も再送
+      // ゲーム中なら手札も再送（選択済みなら上書き防止のため再送しない）
       if (this.room.phase === 'selecting') {
-        const hand = this.room.hands.get(existingId);
-        if (hand) {
-          this.send(ws, { type: 'deal', cards: hand, round: this.room.round });
+        if (player.selectedCards.length === 0) {
+          const hand = this.room.hands.get(existingId);
+          if (hand) {
+            this.send(ws, { type: 'deal', cards: hand, round: this.room.round });
+          }
         }
       } else if (this.room.phase === 'voting') {
         // 投票済みかどうかも伝える（リロード後の二重投票・迷子を防ぐ）
@@ -342,6 +369,7 @@ export class RoomDurableObject implements DurableObject {
 
     player.ready = !player.ready;
     this.saveAttachment(player);
+    await this.persist();
     this.broadcastPlayers();
   }
 
@@ -427,6 +455,8 @@ export class RoomDurableObject implements DurableObject {
     player.selectedCards = cardIds;
     this.saveAttachment(player);
     this.clearSelectionTimer(player.id);
+    // eviction後の再接続でも選択状態を失わないよう永続化する
+    await this.persist();
 
     // Check if all players have finished (selected, or have no cards in hand)
     if (!this.allPlayersDone()) {
@@ -572,8 +602,10 @@ export class RoomDurableObject implements DurableObject {
       }
     }
 
+    if (topCards.length === 0) return; // 票が無い（空ルーム等）の場合は結果を作らない
     const winnerId = topCards[Math.floor(Math.random() * topCards.length)];
-    const winnerCard = this.room.survivors.find(c => c.id === winnerId)!;
+    const winnerCard = this.room.survivors.find(c => c.id === winnerId);
+    if (!winnerCard) return;
     this.room.result = winnerCard;
 
     const votes: Record<string, string> = {};

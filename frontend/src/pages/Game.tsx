@@ -96,34 +96,7 @@ export default function Game() {
   if (room.phase === 'selecting' && room.cards.length > 0 && !selecting) {
     return (
       <div className="page" role="main" style={{ padding: 'var(--space-md)' }}>
-        {/* タイムアウト通知 */}
-        <AnimatePresence>
-          {showTimeout && (
-            <motion.div
-              initial={{ opacity: 0, y: -40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -40 }}
-              style={{
-                position: 'fixed',
-                top: 16,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'var(--danger)',
-                color: 'white',
-                padding: '10px 20px',
-                borderRadius: 'var(--radius-md)',
-                fontWeight: 700,
-                fontSize: 14,
-                zIndex: 50,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {timeoutText}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* ヘッダー */}
+          {/* ヘッダー */}
         <div style={{
           width: '100%',
           display: 'flex',
@@ -228,13 +201,42 @@ export default function Game() {
   // 待機状態
   return (
     <div className="page" role="main" style={{ justifyContent: 'center' }}>
+      {/* タイムアウト通知 */}
+      <AnimatePresence>
+        {showTimeout && (
+          <motion.div
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            style={{
+              position: 'fixed',
+              top: 16,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'var(--danger)',
+              color: 'white',
+              padding: '10px 20px',
+              borderRadius: 'var(--radius-md)',
+              fontWeight: 700,
+              fontSize: 14,
+              zIndex: 50,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {timeoutText}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <motion.div
         animate={{ opacity: [0.5, 1, 0.5] }}
         transition={{ duration: 2, repeat: Infinity }}
         style={{ textAlign: 'center' }}
       >
         <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 'var(--space-md)' }}>
-          {selecting || room.phase === 'voting' ? t('game.waiting_others') : t('game.dealing')}
+          {selecting || room.phase === 'voting' || (room.phase === 'selecting' && room.cards.length === 0)
+            ? t('game.waiting_others')
+            : t('game.dealing')}
         </p>
         {room.pending.length > 0 && (
           <p aria-live="polite" style={{ color: 'var(--text-sub)', fontSize: 14 }}>

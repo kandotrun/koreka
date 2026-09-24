@@ -186,10 +186,12 @@ export function useRoom(code: string | undefined) {
     };
   }, [code]);
 
-  const sendMessage = useCallback((msg: ClientMessage) => {
+  const sendMessage = useCallback((msg: ClientMessage): boolean => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
+      return true;
     }
+    return false;
   }, []);
 
   const join = useCallback((name: string) => sendMessage({ type: 'join', name }), [sendMessage]);
@@ -197,12 +199,24 @@ export function useRoom(code: string | undefined) {
   const start = useCallback(() => sendMessage({ type: 'start' }), [sendMessage]);
   const select = useCallback((cardIds: string[]) => sendMessage({ type: 'select', cardIds }), [sendMessage]);
   const vote = useCallback((cardId: string) => {
-    sendMessage({ type: 'vote', cardId });
-    // 楽観的更新: 投票直後に待機画面へ（不正投票時は invalid_selection で戻る）
-    setState(s => ({ ...s, voted: true }));
+    // 送信できたときだけ楽観的に投票済みにする（切断中の無言の票ロストを防ぐ）
+    if (sendMessage({ type: 'vote', cardId })) {
+      setState(s => ({ ...s, voted: true }));
+    }
   }, [sendMessage]);
   const restart = useCallback(() => sendMessage({ type: 'restart' }), [sendMessage]);
   const kick = useCallback((playerId: string) => sendMessage({ type: 'kick', playerId }), [sendMessage]);
+
+  // 部屋(code)が変わったら致命的エラー記憶をリセットし、古い接続を確実に落とす
+  useEffect(() => {
+    fatalRef.current = false;
+    setState(s => ({ ...s, error: null }));
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [code]);
 
   useEffect(() => {
     if (!code || wsRef.current) return;

@@ -414,6 +414,22 @@ new_classes = ["RoomDurableObject"]
 | Max players per room | 8 |
 | Card pool size | 200+ (initial) + AI generated |
 
+## 状態の耐久化（Durable Object storage + alarm）
+
+Durable Object はハイバネーション/再起動でインメモリ状態（setTimeout 等）を失うため、
+進行に必要な状態と締切は storage に永続化し、alarm で再開する。
+
+- 永続化キー:
+  - `room`: ゲーム状態一式（phase / hostId / deck / round / hands / votes / survivors / result / プレイヤー名簿）
+  - `selectDeadlineAt` / `voteDeadlineAt`: 選択・投票の締切（各30秒）
+  - `disconnectCleanupAt`: waiting 中の切断者を30秒後に削除する時刻
+  - `ttlAt`: ルーム全体の自動削除（2時間）
+- `rearmAlarm()` が全キーの最小時刻で alarm を再設定し、復帰時の `alarm()` は
+  「現在時刻と締切を再比較してから」処理する（早発・遅延 alarm が誤爆しない）
+- タイムアウト処理: 選択締切 → 未選択者をランダム自動選択して進行 / 投票締切 → 未投票者を自動投票して結果確定
+- プレイヤー名簿も永続化されるため、WS切断後に DO が evict されても同じ playerId で再接続できる
+  （再接続時はフェーズに応じて deal / final_vote(voted付き) / result を再送）
+
 ## Future (Post-MVP)
 
 - 📸 思い出記録: 結果実行後に写真+コメント保存
