@@ -21,12 +21,17 @@ export default function Lobby() {
   const [soundOn, setSoundOn] = useState(sound.enabled);
   const needsName = !room.playerId && !sessionStorage.getItem('playerName');
 
-  // ゲーム開始でGame画面に遷移
+  // ゲーム開始・再接続時はフェーズに応じて遷移する
   useEffect(() => {
-    if (room.phase === 'selecting') {
+    if (room.phase === 'selecting' || room.phase === 'voting') {
       navigate(`/${code}/game`);
+    } else if (room.phase === 'result' && room.result) {
+      // ロビーに残ったまま結果フェーズに復帰した場合（リロード後の再接続など）
+      navigate(`/${code}/result`, {
+        state: { card: room.result.card, votes: room.result.votes, players: room.players },
+      });
     }
-  }, [room.phase, code, navigate]);
+  }, [room.phase, room.result, room.players, code, navigate]);
 
   // プレイヤー参加時のサウンド
   useEffect(() => {

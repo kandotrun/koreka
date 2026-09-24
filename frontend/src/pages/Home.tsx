@@ -48,6 +48,7 @@ export default function Home() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set(allCategories));
   const [customCardsText, setCustomCardsText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const toggleCategory = (cat: string) => {
@@ -73,6 +74,7 @@ export default function Home() {
   const handleCreateRoom = async () => {
     if (!name.trim()) return;
     setLoading(true);
+    setCreateError(null);
     try {
       const settings: Record<string, unknown> = {};
       // カスタムカードが入力されている場合
@@ -93,12 +95,18 @@ export default function Home() {
           ...(Object.keys(settings).length > 0 ? { settings } : {}),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({} as { code?: string }));
+      if (!res.ok || !data.code) {
+        // 作成に失敗した場合は画面にエラーを表示（無言で失敗しない）
+        setCreateError(t('home.create_failed'));
+        return;
+      }
       // Store name for WebSocket join
       sessionStorage.setItem('playerName', name);
       navigate(`/${data.code}`);
     } catch (err) {
       console.error(err);
+      setCreateError(t('home.create_failed'));
     } finally {
       setLoading(false);
     }
@@ -531,6 +539,12 @@ export default function Home() {
                 ))}
               </div>
             </div>
+          )}
+
+          {mode === 'create' && createError && (
+            <p role="alert" style={{ fontSize: 13, color: 'var(--danger)', textAlign: 'center' }}>
+              {createError}
+            </p>
           )}
 
           <button

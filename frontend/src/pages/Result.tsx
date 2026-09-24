@@ -55,20 +55,19 @@ export default function Result() {
   const [showMemoryModal, setShowMemoryModal] = useState(false);
   const [memoryComment, setMemoryComment] = useState('');
   const [memorySaving, setMemorySaving] = useState(false);
-  const state = location.state as {
+  const navState = location.state as {
     card: CardType;
     votes: Record<string, string>;
     players: PlayerInfo[];
   } | null;
 
-  if (!state) {
-    navigate(`/${code || ''}`);
-    return null;
-  }
+  // リロード時はroom.result（サーバーから再送される）で復元する
+  const result = navState ?? (room.result
+    ? { card: room.result.card, votes: room.result.votes, players: room.players }
+    : null);
 
-  const { card, votes, players } = state;
-  const voteCount = Object.values(votes).filter(v => v === card.id).length;
-  const totalPlayers = players.length;
+  const voteCount = result ? Object.values(result.votes).filter(v => v === result.card.id).length : 0;
+  const totalPlayers = result ? result.players.length : 0;
 
   const handleSaveMemory = async () => {
     if (!memoryComment.trim() || !code) return;
@@ -93,15 +92,18 @@ export default function Result() {
 
   useEffect(() => {
     sound.play('result');
-    // Fire-and-forget: save result card to D1
-    if (code && card?.id) {
+  }, []);
+
+  // Fire-and-forget: save result card to D1（復元で届いた場合も含む）
+  useEffect(() => {
+    if (code && result?.card?.id) {
       fetch(`/api/rooms/${code}/result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardId: card.id }),
+        body: JSON.stringify({ cardId: result.card.id }),
       }).catch(() => {});
     }
-  }, []);
+  }, [code, result?.card?.id]);
 
   // Navigate back to lobby on restart
   useEffect(() => {
@@ -109,6 +111,23 @@ export default function Result() {
       navigate(`/${code}`);
     }
   }, [room.phase, code, navigate]);
+
+  // 結果がまだ無い場合（リロード直後など）は再接続での再送を待ち、届かなければロビーへ戻す
+  useEffect(() => {
+    if (result || room.error) return;
+    const timer = setTimeout(() => navigate(`/${code || ''}`), 2500);
+    return () => clearTimeout(timer);
+  }, [result, room.error, code, navigate]);
+
+  if (!result) {
+    return (
+      <div className="page" role="main" style={{ justifyContent: 'center' }}>
+        <p style={{ color: 'var(--text-sub)', fontSize: 14 }}>{t('common.loading')}</p>
+      </div>
+    );
+  }
+
+  const { card } = result;
 
   return (
     <div className="page" role="main" style={{ justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>

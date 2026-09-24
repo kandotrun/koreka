@@ -16,6 +16,7 @@ export default function Game() {
   const [soundOn, setSoundOn] = useState(sound.enabled);
   const [countdown, setCountdown] = useState(30);
   const [showTimeout, setShowTimeout] = useState(false);
+  const [timeoutText, setTimeoutText] = useState('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Countdown timer for selecting phase
@@ -38,10 +39,17 @@ export default function Game() {
     if (timerRef.current) clearInterval(timerRef.current);
   }, [room.phase, room.cards, selecting]);
 
-  // Handle selection timeout error
+  // 選択/投票タイムアウトのバナー表示
   useEffect(() => {
     if (room.error === 'selection_timeout') {
       setSelecting(true);
+      setTimeoutText(t('game.timeout'));
+      setShowTimeout(true);
+      const timer = setTimeout(() => setShowTimeout(false), 3000);
+      return () => clearTimeout(timer);
+    }
+    if (room.error === 'vote_timeout') {
+      setTimeoutText(t('game.vote_timeout'));
       setShowTimeout(true);
       const timer = setTimeout(() => setShowTimeout(false), 3000);
       return () => clearTimeout(timer);
@@ -80,11 +88,8 @@ export default function Game() {
     setSelecting(true);
   }, [room.select]);
 
-  const [voted, setVoted] = useState(false);
-
   const handleVote = useCallback((cardId: string) => {
     room.vote(cardId);
-    setVoted(true);
   }, [room.vote]);
 
   // 選別フェーズ
@@ -113,7 +118,7 @@ export default function Game() {
                 whiteSpace: 'nowrap',
               }}
             >
-              {t('game.timeout')}
+              {timeoutText}
             </motion.div>
           )}
         </AnimatePresence>
@@ -180,7 +185,7 @@ export default function Game() {
   }
 
   // 最終投票フェーズ
-  if (room.phase === 'voting' && room.survivors.length > 0 && !voted) {
+  if (room.phase === 'voting' && room.survivors.length > 0 && !room.voted) {
     return (
       <div className="page" role="main" style={{ justifyContent: 'flex-start', paddingTop: 'var(--space-2xl)' }}>
         <motion.h2
@@ -229,7 +234,7 @@ export default function Game() {
         style={{ textAlign: 'center' }}
       >
         <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 'var(--space-md)' }}>
-          {selecting ? t('game.waiting_others') : t('game.dealing')}
+          {selecting || room.phase === 'voting' ? t('game.waiting_others') : t('game.dealing')}
         </p>
         {room.pending.length > 0 && (
           <p aria-live="polite" style={{ color: 'var(--text-sub)', fontSize: 14 }}>

@@ -73,6 +73,11 @@ const translations: Record<string, Record<Lang, string>> = {
   },
   'home.room_code_label': { ja: 'ルームコード', en: 'Room Code', ko: '방 코드' },
   'home.create_submit': { ja: 'ルームを作成', en: 'Create Room', ko: '방 만들기' },
+  'home.create_failed': {
+    ja: 'ルーム作成に失敗しました。時間をおいてもう一度お試しください',
+    en: 'Failed to create the room. Please try again in a moment',
+    ko: '방 생성에 실패했습니다. 잠시 후 다시 시도해 주세요',
+  },
   'home.join_submit': { ja: '参加する', en: 'Join', ko: '참가하기' },
 
   // ===== Lobby =====
@@ -132,6 +137,17 @@ const translations: Record<string, Record<Lang, string>> = {
     ko: '시간 초과 - 카드가 랜덤으로 선택되었습니다',
   },
   'game.time_remaining': { ja: '残り{0}秒', en: '{0}s left', ko: '{0}초 남음' },
+  'game.vote_timeout': {
+    ja: '投票タイムアウト - ランダムに投票されました',
+    en: 'Vote timeout - a random vote was cast',
+    ko: '투표 시간 초과 - 무작위로 투표되었습니다',
+  },
+  'game.pass': { ja: 'パス', en: 'Pass', ko: '패스' },
+  'game.keep': { ja: 'やる', en: 'Keep', ko: '한다' },
+  'game.hint_pass': { ja: '← やらない', en: '← Skip', ko: '← 안 함' },
+  'game.hint_keep': { ja: 'やる →', en: 'Keep →', ko: '한다 →' },
+  'game.cards_left': { ja: '残り {0}/{1}', en: '{0}/{1} left', ko: '{0}/{1} 남음' },
+  'game.keyboard_hint': { ja: '← → キーでも選べます', en: 'You can also use ← → keys', ko: '← → 키로도 선택할 수 있어요' },
 
   // ===== Result =====
   'result.vote_count': {
